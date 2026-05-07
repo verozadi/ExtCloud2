@@ -527,16 +527,14 @@ open class SoraStream(val sharedPref: SharedPreferences? = null) : TmdbProvider(
                 callback
             )
 
-            "kisskh" -> if (res.isAsian || res.isAnime || res.isBollywood) {
-                invokeKisskh(
-                    res.titleCandidates(),
-                    res.year,
-                    res.season,
-                    res.episode,
-                    subtitleCallback,
-                    callback
-                )
-            }
+            "kisskh" -> invokeKisskh(
+                res.titleCandidates(),
+                res.year,
+                res.season,
+                res.episode,
+                subtitleCallback,
+                callback
+            )
 
             "yflix" -> invokeYflix(
                 res.id,

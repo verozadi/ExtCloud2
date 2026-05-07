@@ -65,6 +65,22 @@ object SoraExtractor : SoraStream() {
             targetEpisode?.id ?: return
         }
 
+        if (runCatching {
+                invokeIdlixChallenge(contentType, contentId, subtitleCallback, callback)
+            }.getOrDefault(false)
+        ) return
+
+        runCatching {
+            invokeIdlixPlayInfo(contentType, contentId, subtitleCallback, callback)
+        }.onFailure { logError(it) }
+    }
+
+    private suspend fun invokeIdlixChallenge(
+        contentType: String,
+        contentId: String,
+        subtitleCallback: (SubtitleFile) -> Unit,
+        callback: (ExtractorLink) -> Unit,
+    ): Boolean {
         val ts = System.currentTimeMillis()
         val aclrRes = app.get(
             "$idlixAPI/pagead/ad_frame.js?_=$ts",
@@ -86,7 +102,7 @@ object SoraExtractor : SoraStream() {
             interceptor = wpRedisInterceptor
         ).text
 
-        val challengeRes = tryParseJson<IdlixChallengeResponse>(challengeText) ?: return
+        val challengeRes = tryParseJson<IdlixChallengeResponse>(challengeText) ?: return false
         val nonce = solvePow(challengeRes.challenge, challengeRes.difficulty)
 
         val solveJson = """{"challenge": "${challengeRes.challenge}", "signature": "${challengeRes.signature}", "nonce": $nonce}"""
@@ -102,14 +118,65 @@ object SoraExtractor : SoraStream() {
             interceptor = wpRedisInterceptor
         ).text
 
-        val embedUrl = extractUrlFromSolveResponse(solveRes) ?: return
+        val embedUrl = extractUrlFromSolveResponse(solveRes) ?: return false
         val embedPageUrl = when {
             embedUrl.startsWith("http", true) -> embedUrl
             embedUrl.startsWith("/") -> "$idlixAPI$embedUrl"
             else -> "$idlixAPI/$embedUrl"
         }
 
-        loadExtractor(embedPageUrl, "$idlixAPI/", subtitleCallback, callback)
+        var emitted = false
+        loadExtractor(embedPageUrl, "$idlixAPI/", subtitleCallback) { link ->
+            emitted = true
+            callback.invoke(link)
+        }
+        return emitted
+    }
+
+    private suspend fun invokeIdlixPlayInfo(
+        contentType: String,
+        contentId: String,
+        subtitleCallback: (SubtitleFile) -> Unit,
+        callback: (ExtractorLink) -> Unit,
+    ): Boolean {
+        val res = app.get(
+            "$idlixAPI/api/watch/play-info/$contentType/$contentId",
+            interceptor = wpRedisInterceptor,
+        ).parsedSafe<IdlixPlayInfoResponse>() ?: return false
+
+        val redeemUrl = res.redeemUrl?.takeIf { it.isNotBlank() } ?: return false
+        val claim = res.claim?.takeIf { it.isNotBlank() } ?: return false
+        val iframeResponse = app.post(
+            redeemUrl,
+            requestBody = """{"claim":"$claim"}""".toRequestBody("application/json".toMediaTypeOrNull()),
+            headers = mapOf(
+                "accept" to "application/json,text/plain,*/*",
+                "content-type" to "application/json",
+                "origin" to idlixAPI,
+                "referer" to idlixAPI,
+            ),
+            interceptor = wpRedisInterceptor,
+        ).parsedSafe<IdlixIframeResponse>() ?: return false
+
+        var emitted = false
+        iframeResponse.url?.takeIf { it.isNotBlank() }?.let { streamUrl ->
+            M3u8Helper.generateM3u8("Idlix", streamUrl, idlixAPI).forEach { link ->
+                emitted = true
+                callback.invoke(link)
+            }
+        }
+
+        iframeResponse.subtitles.orEmpty().forEach { subtitle ->
+            val path = subtitle.path?.takeIf { it.isNotBlank() } ?: return@forEach
+            subtitleCallback.invoke(
+                newSubtitleFile(
+                    subtitle.label?.takeIf { it.isNotBlank() } ?: subtitle.lang ?: "Unknown",
+                    path,
+                )
+            )
+        }
+
+        return emitted
     }
 
     suspend fun invokeYflix(
@@ -1832,6 +1899,22 @@ object SoraExtractor : SoraStream() {
         @param:JsonProperty("challenge") val challenge: String,
         @param:JsonProperty("signature") val signature: String,
         @param:JsonProperty("difficulty") val difficulty: Int,
+    )
+
+    private data class IdlixPlayInfoResponse(
+        @param:JsonProperty("claim") val claim: String? = null,
+        @param:JsonProperty("redeemUrl") val redeemUrl: String? = null,
+    )
+
+    private data class IdlixIframeResponse(
+        @param:JsonProperty("url") val url: String? = null,
+        @param:JsonProperty("subtitles") val subtitles: List<IdlixSubtitle>? = emptyList(),
+    )
+
+    private data class IdlixSubtitle(
+        @param:JsonProperty("lang") val lang: String? = null,
+        @param:JsonProperty("label") val label: String? = null,
+        @param:JsonProperty("path") val path: String? = null,
     )
 
     private data class KisskhMedia(
