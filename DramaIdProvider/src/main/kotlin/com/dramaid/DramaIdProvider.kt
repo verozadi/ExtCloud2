@@ -149,8 +149,8 @@ class DramaIdProvider : MainAPI() {
                 val iframeUrl = normalizeUrl(iframe.attr("src").ifBlank { iframe.attr("data-src") }, fixedUrl) ?: return@forEach
                 handled = true
                 runCatching { loadExtractor(iframeUrl, fixedUrl, subtitleCallback, callback) }
-                decodeBerkasDriveId(iframeUrl)?.let { direct ->
-                    emitDirect(direct, "BerkasDrive", fixedUrl, null, emitted, callback)
+                decodeBerkasDriveId(iframeUrl)?.let { resolver ->
+                    runCatching { loadExtractor(resolver, fixedUrl, subtitleCallback, callback) }
                 }
             }
         }
@@ -172,7 +172,7 @@ class DramaIdProvider : MainAPI() {
                 val serverUrl = normalizeUrl(server.url.orEmpty(), fixedUrl) ?: return@forEach
                 handled = true
                 runCatching { loadExtractor(serverUrl, fixedUrl, subtitleCallback, callback) }
-                emitDirect(serverUrl, qualityLabel.ifBlank { server.urutan_text ?: "Server" }, fixedUrl, qualityLabel, emitted, callback)
+                emitDirectIfMedia(serverUrl, qualityLabel.ifBlank { server.urutan_text ?: "Server" }, fixedUrl, qualityLabel, emitted, callback)
             }
         }
 
@@ -182,7 +182,7 @@ class DramaIdProvider : MainAPI() {
                 ?: link.attr("title").ifBlank { link.text() }.trim()
             handled = true
             runCatching { loadExtractor(downloadUrl, fixedUrl, subtitleCallback, callback) }
-            emitDirect(downloadUrl, label.ifBlank { "Download" }, fixedUrl, label, emitted, callback)
+            emitDirectIfMedia(downloadUrl, label.ifBlank { "Download" }, fixedUrl, label, emitted, callback)
         }
 
         return handled || emitted.isNotEmpty()
@@ -245,7 +245,7 @@ class DramaIdProvider : MainAPI() {
         }
     }
 
-    private suspend fun emitDirect(
+    private suspend fun emitDirectIfMedia(
         url: String,
         label: String,
         refererUrl: String,
@@ -253,6 +253,7 @@ class DramaIdProvider : MainAPI() {
         emitted: MutableSet<String>,
         callback: (ExtractorLink) -> Unit
     ) {
+        if (!isMediaUrl(url) || isResolverUrl(url)) return
         if (!emitted.add(url)) return
 
         callback(
@@ -270,6 +271,14 @@ class DramaIdProvider : MainAPI() {
                 )
             }
         )
+    }
+
+    private fun isMediaUrl(url: String): Boolean {
+        return Regex("""(?i)\.(mp4|m3u8)(?:$|[?#&])""").containsMatchIn(url)
+    }
+
+    private fun isResolverUrl(url: String): Boolean {
+        return url.contains("stordl.halahgan.com", true) || url.contains("dl.berkasdrive.com/streaming", true)
     }
 
     private fun detailValue(document: Document, label: String): String? {
