@@ -352,7 +352,7 @@ object SoraExtractor : SoraStream() {
             }
         }
 
-        urls.take(4).forEach { url ->
+        urls.take(2).forEach { url ->
             invokeMultimoviesUrl(url, subtitleCallback, callback)
         }
     }
@@ -1034,7 +1034,7 @@ object SoraExtractor : SoraStream() {
                 UhdMoviesCandidate(context, href)
             }
             .distinctBy { it.url }
-            .take(5)
+            .take(3)
 
         links.forEach { candidate ->
             val directUrl = runCatching { resolveUhdmoviesDownload(candidate.url) }

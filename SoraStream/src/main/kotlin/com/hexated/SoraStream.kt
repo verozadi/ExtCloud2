@@ -44,6 +44,8 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.supervisorScope
+import kotlinx.coroutines.TimeoutCancellationException
+import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withLock
@@ -84,7 +86,7 @@ open class SoraStream(val sharedPref: SharedPreferences? = null) : TmdbProvider(
         const val jikanAPI = "https://api.jikan.moe/v4"
 
         private const val apiKey = "b030404650f279792a8d3287232358e3"
-        private const val sourceConcurrency = 6
+        private const val sourceConcurrency = 8
 
         /** ALL SOURCES */
         const val idlixAPI = "https://z1.idlixku.com"
@@ -133,6 +135,7 @@ open class SoraStream(val sharedPref: SharedPreferences? = null) : TmdbProvider(
             val movie: Boolean = true,
             val tv: Boolean = true,
             val subtitleOnly: Boolean = false,
+            val timeoutMs: Long = 20_000L,
         )
 
         val sourceRegistry = listOf(
@@ -154,8 +157,7 @@ open class SoraStream(val sharedPref: SharedPreferences? = null) : TmdbProvider(
             SourceDescriptor("rivestream", SourceGroup.EMBED, 150),
             SourceDescriptor("smashystream", SourceGroup.EMBED, 160),
             SourceDescriptor("vembed", SourceGroup.EMBED, 170, tv = false),
-            SourceDescriptor("wyzie", SourceGroup.SUBTITLE, 180, subtitleOnly = true),
-            SourceDescriptor("watchsomuch", SourceGroup.SUBTITLE, 190, subtitleOnly = true),
+            SourceDescriptor("yflix", SourceGroup.EMBED, 175),
             SourceDescriptor("idlix", SourceGroup.FALLBACK, 200),
             SourceDescriptor("azmovies", SourceGroup.FALLBACK, 210, tv = false),
             SourceDescriptor("noxx", SourceGroup.FALLBACK, 220, movie = false),
@@ -163,7 +165,8 @@ open class SoraStream(val sharedPref: SharedPreferences? = null) : TmdbProvider(
             SourceDescriptor("uhdmovies", SourceGroup.FALLBACK, 235),
             SourceDescriptor("multimovies", SourceGroup.FALLBACK, 238),
             SourceDescriptor("kisskh", SourceGroup.FALLBACK, 240),
-            SourceDescriptor("yflix", SourceGroup.EMBED, 250),
+            SourceDescriptor("wyzie", SourceGroup.SUBTITLE, 260, subtitleOnly = true, timeoutMs = 10_000L),
+            SourceDescriptor("watchsomuch", SourceGroup.SUBTITLE, 270, subtitleOnly = true, timeoutMs = 10_000L),
         ).sortedBy { it.priority }
 
         suspend fun getApiBase(): String {
@@ -454,7 +457,11 @@ open class SoraStream(val sharedPref: SharedPreferences? = null) : TmdbProvider(
                 async {
                     semaphore.withPermit {
                         try {
-                            invokeSource(source, res, subtitleCallback, callback)
+                            withTimeout(source.timeoutMs) {
+                                invokeSource(source, res, subtitleCallback, callback)
+                            }
+                        } catch (e: TimeoutCancellationException) {
+                            logError(e)
                         } catch (e: CancellationException) {
                             throw e
                         } catch (e: Exception) {
