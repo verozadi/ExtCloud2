@@ -1044,10 +1044,10 @@
     },
     {
         "iconUrl": "https://github.com/duro92/ExtCloud/blob/main/SoraStream/Icon.png",
-        "fileHash": "sha256-6c670dd92927cde4ce8ce674f44880c4365ee4a378ef0a2d64d3c690edfb5c10",
+        "fileHash": "sha256-038750e5bd9fc2a39a00ac3b2e2a7eb6d2786fa13119db8fbff785844923c561",
         "apiVersion": 1,
         "repositoryUrl": "https://github.com/Pendztagram/ex",
-        "fileSize": 257757,
+        "fileSize": 274602,
         "status": 1,
         "language": "en",
         "authors": [
