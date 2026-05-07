@@ -708,6 +708,104 @@ object SoraExtractor : SoraStream() {
 
     }
 
+    suspend fun invokeVideasy(
+        tmdbId: Int?,
+        season: Int?,
+        episode: Int?,
+        callback: (ExtractorLink) -> Unit,
+    ) {
+        val id = tmdbId ?: return
+        val url = if (season == null) {
+            "$videasyAPI/movie/$id"
+        } else {
+            "$videasyAPI/tv/$id/$season/$episode"
+        }
+
+        invokeWebviewEmbedSource("Videasy", url, "$videasyAPI/", videasyAPI, callback, useOkhttp = false)
+    }
+
+    suspend fun invokeVidzen(
+        tmdbId: Int?,
+        season: Int?,
+        episode: Int?,
+        callback: (ExtractorLink) -> Unit,
+    ) {
+        val id = tmdbId ?: return
+        val url = if (season == null) {
+            "$vidzenAPI/movie/$id"
+        } else {
+            "$vidzenAPI/tv/$id/$season/$episode"
+        }
+
+        invokeWebviewEmbedSource("VidZen", url, "$vidzenAPI/", vidzenAPI, callback, useOkhttp = false)
+    }
+
+    suspend fun invokeCinezo(
+        tmdbId: Int?,
+        season: Int?,
+        episode: Int?,
+        callback: (ExtractorLink) -> Unit,
+    ) {
+        val id = tmdbId ?: return
+        val url = if (season == null) {
+            "$cinezoAPI/embed/movie/$id"
+        } else {
+            "$cinezoAPI/embed/tv/$id/$season/$episode"
+        }
+
+        invokeWebviewEmbedSource("Cinezo", url, "$cinezoAPI/", cinezoAPI, callback, useOkhttp = false)
+    }
+
+    suspend fun invokeWave(
+        tmdbId: Int?,
+        season: Int?,
+        episode: Int?,
+        callback: (ExtractorLink) -> Unit,
+    ) {
+        val id = tmdbId ?: return
+        val path = if (season == null) {
+            "movie/$id"
+        } else {
+            "tv/$id/$season/$episode"
+        }
+        val servers = listOf(
+            "1" to "Wave VidKing",
+            "3" to "Wave Vidora",
+            "4" to "Wave Vidrock",
+            "5" to "Wave Vidnest",
+            "6" to "Wave 111movies",
+        )
+
+        servers.forEach { (api, sourceName) ->
+            val url = "$waveAPI/$path?api=$api"
+            val page = runCatching {
+                app.get(url, headers = mapOf("User-Agent" to USER_AGENT), timeout = 15)
+            }.getOrNull()
+            val iframe = page?.document?.selectFirst("iframe[src]")?.attr("abs:src")
+                ?.takeIf { it.isNotBlank() && !it.contains("vidsrc", true) }
+
+            if (!iframe.isNullOrBlank()) {
+                var emitted = false
+                loadExtractor(iframe, "$waveAPI/", { _: SubtitleFile -> }) { link ->
+                    emitted = true
+                    callback.invoke(link)
+                }
+                if (emitted) return@forEach
+
+                invokeWebviewEmbedSource(
+                    sourceName,
+                    iframe,
+                    "$waveAPI/",
+                    getBaseUrl(iframe),
+                    callback,
+                    useOkhttp = false
+                )
+            } else {
+                invokeWebviewEmbedSource(sourceName, url, "$waveAPI/", waveAPI, callback, useOkhttp = false)
+            }
+        }
+    }
+
     suspend fun invokeWyzie(
         tmdbId: Int?,
         season: Int?,
@@ -798,6 +896,7 @@ object SoraExtractor : SoraStream() {
         )
 
         val mediaUrl = mediaRes.url
+        if (mediaUrl.contains("vidsrc", true)) return false
         val mediaType = when {
             mediaUrl.contains(".m3u8", ignoreCase = true) -> ExtractorLinkType.M3U8
             mediaUrl.contains(".mp4", ignoreCase = true) -> INFER_TYPE
@@ -827,6 +926,7 @@ object SoraExtractor : SoraStream() {
 
         extractPlayableUrlFromHtml(mediaRes.text, getBaseUrl(mediaRes.url))?.let { nestedUrl ->
             val normalizedUrl = nestedUrl.fixUrlBloat()
+            if (normalizedUrl.contains("vidsrc", true)) return@let
             if (normalizedUrl.contains(".m3u8", true) || normalizedUrl.contains(".mp4", true)) {
                 emitted = true
                 callback.invoke(
@@ -918,7 +1018,7 @@ object SoraExtractor : SoraStream() {
                     .toList()
             ).map { fixUrl(it, autoEmbedAPI) }.distinct()
 
-            serverUrls.forEach { serverUrl ->
+            serverUrls.filterNot { it.contains("vidsrc", true) }.forEach { serverUrl ->
                 when {
                     loadVidsrcXpass(serverUrl, isTv, referer, callback) -> {
                         emitted = true
@@ -1765,6 +1865,7 @@ object SoraExtractor : SoraStream() {
         referer: String?,
         callback: (ExtractorLink) -> Unit,
     ): Boolean {
+        if (isVidsrcDisabled()) return false
         if (!url.contains("vidsrc", true) && !url.contains("vsembed", true)) return false
 
         val embedUrl = if (url.contains("autoplay=", true)) url else {
@@ -1876,6 +1977,8 @@ object SoraExtractor : SoraStream() {
             useOkhttp = false,
         )
     }
+
+    private fun isVidsrcDisabled(): Boolean = true
 
     private fun extractPlayableUrlFromHtml(
         html: String,

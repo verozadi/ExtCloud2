@@ -7,17 +7,17 @@ import com.hexated.SoraExtractor.invokeIdlix
 import com.hexated.SoraExtractor.invokeYflix
 import com.hexated.SoraExtractor.invokeVidfast
 import com.hexated.SoraExtractor.invokeVidlink
-import com.hexated.SoraExtractor.invokeVidsrc
-import com.hexated.SoraExtractor.invokeVidsrcme
-import com.hexated.SoraExtractor.invokeVidsrccc
 import com.hexated.SoraExtractor.invokeVixsrc
+import com.hexated.SoraExtractor.invokeVideasy
+import com.hexated.SoraExtractor.invokeVidzen
+import com.hexated.SoraExtractor.invokeCinezo
+import com.hexated.SoraExtractor.invokeWave
 import com.hexated.SoraExtractor.invokeWatchsomuch
 import com.hexated.SoraExtractor.invokeWyzie
 import com.hexated.SoraExtractor.invokeCineSrc
 import com.hexated.SoraExtractor.invokeMafiaEmbed
 import com.hexated.SoraExtractor.invokeAutoEmbed
 import com.hexated.SoraExtractor.invoke2Embed
-import com.hexated.SoraExtractor.invokeVidsrcMov
 import com.hexated.SoraExtractor.invokeMultiEmbed
 import com.hexated.SoraExtractor.invokeNinetv
 import com.hexated.SoraExtractor.invokeRidomovies
@@ -95,6 +95,10 @@ open class SoraStream(val sharedPref: SharedPreferences? = null) : TmdbProvider(
         const val watchSomuchAPI = "https://watchsomuch.tv"
         const val vidlinkAPI = "https://vidlink.pro"
         const val vidfastAPI = "https://vidfast.pro"
+        const val videasyAPI = "https://player.videasy.net"
+        const val vidzenAPI = "https://vidzen.fun"
+        const val cinezoAPI = "https://player.cinezo.live"
+        const val waveAPI = "https://wavembed.lol"
         const val wyzieAPI = "https://sub.wyzie.ru"
         const val vixsrcAPI = "https://vixsrc.to"
         const val cinesrcAPI = "https://cinesrc.st"
@@ -128,16 +132,17 @@ open class SoraStream(val sharedPref: SharedPreferences? = null) : TmdbProvider(
         )
 
         val sourceRegistry = listOf(
-            SourceDescriptor("vidsrccc", SourceGroup.CORE, 10),
-            SourceDescriptor("vidsrcme", SourceGroup.CORE, 25),
             SourceDescriptor("vidlink", SourceGroup.CORE, 30),
             SourceDescriptor("vidfast", SourceGroup.CORE, 40),
+            SourceDescriptor("videasy", SourceGroup.CORE, 45),
             SourceDescriptor("vixsrc", SourceGroup.EMBED, 50),
+            SourceDescriptor("vidzen", SourceGroup.EMBED, 55),
+            SourceDescriptor("cinezo", SourceGroup.EMBED, 58),
             SourceDescriptor("cinesrc", SourceGroup.EMBED, 60),
             SourceDescriptor("mafiaembed", SourceGroup.EMBED, 70),
             SourceDescriptor("autoembed", SourceGroup.EMBED, 80),
             SourceDescriptor("2embed", SourceGroup.EMBED, 90),
-            SourceDescriptor("vidsrcmov", SourceGroup.EMBED, 100),
+            SourceDescriptor("wave", SourceGroup.EMBED, 100),
             SourceDescriptor("multiembed", SourceGroup.EMBED, 110),
             SourceDescriptor("ninetv", SourceGroup.EMBED, 120),
             SourceDescriptor("ridomovies", SourceGroup.EMBED, 130),
@@ -464,31 +469,17 @@ open class SoraStream(val sharedPref: SharedPreferences? = null) : TmdbProvider(
         callback: (ExtractorLink) -> Unit,
     ) {
         when (source.key) {
-            "vidsrccc" -> invokeVidsrccc(
-                res.id,
-                res.imdbId,
-                res.season,
-                res.episode,
-                subtitleCallback,
-                callback
-            )
-
-            "vidsrcme" -> invokeVidsrcme(
-                res.id,
-                res.season,
-                res.episode,
-                subtitleCallback,
-                callback
-            )
-
             "vixsrc" -> invokeVixsrc(res.id, res.season, res.episode, callback)
             "vidlink" -> invokeVidlink(res.id, res.season, res.episode, callback)
             "vidfast" -> invokeVidfast(res.id, res.season, res.episode, subtitleCallback, callback)
+            "videasy" -> invokeVideasy(res.id, res.season, res.episode, callback)
+            "vidzen" -> invokeVidzen(res.id, res.season, res.episode, callback)
+            "cinezo" -> invokeCinezo(res.id, res.season, res.episode, callback)
             "cinesrc" -> invokeCineSrc(res.id, res.season, res.episode, callback)
             "mafiaembed" -> invokeMafiaEmbed(res.id, res.season, res.episode, callback)
             "autoembed" -> invokeAutoEmbed(res.id, res.season, res.episode, subtitleCallback, callback)
             "2embed" -> invoke2Embed(res.id, res.season, res.episode, callback)
-            "vidsrcmov" -> invokeVidsrcMov(res.id, res.imdbId, res.season, res.episode, callback)
+            "wave" -> invokeWave(res.id, res.season, res.episode, callback)
             "multiembed" -> invokeMultiEmbed(
                 res.id,
                 res.imdbId,
