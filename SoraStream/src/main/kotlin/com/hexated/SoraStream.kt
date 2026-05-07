@@ -33,13 +33,15 @@ import com.lagradost.cloudstream3.LoadResponse.Companion.addTrailer
 import com.lagradost.cloudstream3.metaproviders.TmdbProvider
 import com.lagradost.cloudstream3.LoadResponse.Companion.addImdbId
 import com.lagradost.cloudstream3.LoadResponse.Companion.addTMDbId
+import com.lagradost.cloudstream3.mvvm.logError
 import com.lagradost.cloudstream3.network.CloudflareKiller
 import com.lagradost.cloudstream3.utils.AppUtils.parseJson
 import com.lagradost.cloudstream3.utils.AppUtils.toJson
 import com.lagradost.cloudstream3.utils.ExtractorLink
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
-import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.supervisorScope
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withLock
@@ -436,11 +438,17 @@ open class SoraStream(val sharedPref: SharedPreferences? = null) : TmdbProvider(
         }
         val semaphore = Semaphore(sourceConcurrency)
 
-        coroutineScope {
+        supervisorScope {
             activeSources.map { source ->
                 async {
                     semaphore.withPermit {
-                        invokeSource(source, res, subtitleCallback, callback)
+                        try {
+                            invokeSource(source, res, subtitleCallback, callback)
+                        } catch (e: CancellationException) {
+                            throw e
+                        } catch (e: Exception) {
+                            logError(e)
+                        }
                     }
                 }
             }.awaitAll()
