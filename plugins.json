@@ -1020,6 +1020,29 @@
         "name": "Sflix"
     },
     {
+        "iconUrl": "https://t2.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=https://sontolfilm.com&size=%size%",
+        "fileHash": "sha256-3d13b0d1d83178e26cabadecedadf920af87aae4a810ae22971499c6c8e9e679",
+        "apiVersion": 1,
+        "repositoryUrl": "https://github.com/Pendztagram/ex",
+        "fileSize": 25377,
+        "status": 1,
+        "language": "id",
+        "authors": [
+            "duro92"
+        ],
+        "tvTypes": [
+            "Movie",
+            "TvSeries",
+            "Anime",
+            "AsianDrama"
+        ],
+        "version": 1,
+        "internalName": "SontolFilmProvider",
+        "description": "SontolFilm",
+        "url": "https://raw.githubusercontent.com/Pendztagram/ex/builds/SontolFilmProvider.cs3",
+        "name": "SontolFilmProvider"
+    },
+    {
         "iconUrl": "https://github.com/duro92/ExtCloud/blob/main/SoraStream/Icon.png",
         "fileHash": "sha256-1a58304c7e67d5dc9f628a16b96b72ae3ed7b8e6e0473444eaf7d83c2a0a6fb3",
         "apiVersion": 1,
