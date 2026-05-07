@@ -87,7 +87,7 @@ data class RiveStreamData(
 )
 
 data class RiveStreamVideo(
-    @JsonProperty("quality") val quality: String? = null,
+    @JsonProperty("quality") val quality: Any? = null,
     @JsonProperty("source") val source: String? = null,
     @JsonProperty("url") val url: String? = null,
     @JsonProperty("format") val format: String? = null,

@@ -12,6 +12,8 @@ import com.hexated.SoraExtractor.invokeVideasy
 import com.hexated.SoraExtractor.invokeVidzen
 import com.hexated.SoraExtractor.invokeCinezo
 import com.hexated.SoraExtractor.invokeWave
+import com.hexated.SoraExtractor.invokeUhdmovies
+import com.hexated.SoraExtractor.invokeMultimovies
 import com.hexated.SoraExtractor.invokeWatchsomuch
 import com.hexated.SoraExtractor.invokeWyzie
 import com.hexated.SoraExtractor.invokeCineSrc
@@ -99,6 +101,8 @@ open class SoraStream(val sharedPref: SharedPreferences? = null) : TmdbProvider(
         const val vidzenAPI = "https://vidzen.fun"
         const val cinezoAPI = "https://player.cinezo.live"
         const val waveAPI = "https://wavembed.lol"
+        const val uhdmoviesAPI = "https://uhdmovies.pink"
+        const val multimoviesAPI = "https://multimovies.fyi"
         const val wyzieAPI = "https://sub.wyzie.ru"
         const val vixsrcAPI = "https://vixsrc.to"
         const val cinesrcAPI = "https://cinesrc.st"
@@ -113,7 +117,7 @@ open class SoraStream(val sharedPref: SharedPreferences? = null) : TmdbProvider(
         const val watch32API = "https://watch32.sx"
         const val vembedAPI = "https://vembed.stream"
         const val smashyStreamAPI = "https://embed.smashystream.com"
-        const val riveStreamAPI = "https://rivestream.org"
+        const val riveStreamAPI = "https://www.rivestream.app"
 
         enum class SourceGroup {
             CORE,
@@ -156,6 +160,8 @@ open class SoraStream(val sharedPref: SharedPreferences? = null) : TmdbProvider(
             SourceDescriptor("azmovies", SourceGroup.FALLBACK, 210, tv = false),
             SourceDescriptor("noxx", SourceGroup.FALLBACK, 220, movie = false),
             SourceDescriptor("watch32", SourceGroup.FALLBACK, 230),
+            SourceDescriptor("uhdmovies", SourceGroup.FALLBACK, 235),
+            SourceDescriptor("multimovies", SourceGroup.FALLBACK, 238),
             SourceDescriptor("kisskh", SourceGroup.FALLBACK, 240),
             SourceDescriptor("yflix", SourceGroup.EMBED, 250),
         ).sortedBy { it.priority }
@@ -521,6 +527,23 @@ open class SoraStream(val sharedPref: SharedPreferences? = null) : TmdbProvider(
             )
             "watch32" -> invokeWatch32(
                 res.titleCandidates(),
+                res.season,
+                res.episode,
+                subtitleCallback,
+                callback
+            )
+
+            "uhdmovies" -> invokeUhdmovies(
+                res.titleCandidates(),
+                res.year,
+                res.season,
+                res.episode,
+                callback
+            )
+
+            "multimovies" -> invokeMultimovies(
+                res.titleCandidates(),
+                res.year,
                 res.season,
                 res.episode,
                 subtitleCallback,
