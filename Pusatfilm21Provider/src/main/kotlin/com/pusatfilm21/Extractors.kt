@@ -62,20 +62,6 @@ open class PusatEmturbovid : ExtractorApi() {
             "User-Agent" to USER_AGENT,
             "Accept" to "*/*",
         )
-        val links = mutableListOf<ExtractorLink>()
-
-        links.add(
-            newExtractorLink(
-                source = name,
-                name = "$name Master",
-                url = masterUrl,
-                type = ExtractorLinkType.M3U8,
-            ) {
-                this.headers = playbackHeaders
-                this.quality = Qualities.Unknown.value
-            }
-        )
-
         val generated =
             generateM3u8(
                 source = name,
@@ -85,8 +71,7 @@ open class PusatEmturbovid : ExtractorApi() {
                 headers = playbackHeaders,
             ).distinctBy { it.url }
 
-        links.addAll(generated)
-        if (links.isNotEmpty()) return links.distinctBy { it.url }
+        if (generated.isNotEmpty()) return generated
 
         return listOf(
             newExtractorLink(
