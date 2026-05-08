@@ -31,7 +31,7 @@ import java.net.URLEncoder
 
 class Pusatfilm21Provider : MainAPI() {
     override var mainUrl = "https://v3.pusatfilm21info.com"
-    override var name = "Pusatfilm21"
+    override var name = "Pusatfilm21🥳"
     override var lang = "id"
     override val hasMainPage = true
     override val hasDownloadSupport = true
