@@ -976,10 +976,10 @@
     },
     {
         "iconUrl": "https://t2.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=https://v3.pusatfilm21info.com&size=%size%",
-        "fileHash": "sha256-dd7ca41c1ee07e177dc1611e5a0b5d737ee8f17dca424e7b0a750aafb154316d",
+        "fileHash": "sha256-ccfeaf3798222c07c5d5aca449982eea32092888336d3fb64594cac1a36b5f1b",
         "apiVersion": 1,
         "repositoryUrl": "https://github.com/Pendztagram/ex",
-        "fileSize": 30814,
+        "fileSize": 30967,
         "status": 1,
         "language": "id",
         "authors": [
