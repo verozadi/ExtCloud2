@@ -1,6 +1,7 @@
 package com.pusatfilm21
 
 import com.lagradost.cloudstream3.SubtitleFile
+import com.lagradost.cloudstream3.USER_AGENT
 import com.lagradost.cloudstream3.app
 import com.lagradost.cloudstream3.base64Decode
 import com.lagradost.cloudstream3.extractors.Gdriveplayer
@@ -57,15 +58,35 @@ open class PusatEmturbovid : ExtractorApi() {
             else -> masterUrl
         }
 
+        val playbackHeaders = mapOf(
+            "User-Agent" to USER_AGENT,
+            "Accept" to "*/*",
+        )
+        val links = mutableListOf<ExtractorLink>()
+
+        links.add(
+            newExtractorLink(
+                source = name,
+                name = "$name Master",
+                url = masterUrl,
+                type = ExtractorLinkType.M3U8,
+            ) {
+                this.headers = playbackHeaders
+                this.quality = Qualities.Unknown.value
+            }
+        )
+
         val generated =
             generateM3u8(
                 source = name,
                 name = name,
                 streamUrl = masterUrl,
                 referer = "",
+                headers = playbackHeaders,
             ).distinctBy { it.url }
 
-        if (generated.isNotEmpty()) return generated
+        links.addAll(generated)
+        if (links.isNotEmpty()) return links.distinctBy { it.url }
 
         return listOf(
             newExtractorLink(
@@ -74,6 +95,7 @@ open class PusatEmturbovid : ExtractorApi() {
                 url = masterUrl,
                 type = ExtractorLinkType.M3U8,
             ) {
+                this.headers = playbackHeaders
                 this.quality = Qualities.Unknown.value
             }
         )
