@@ -975,6 +975,28 @@
         "name": "Pmsm"
     },
     {
+        "iconUrl": "https://t2.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=https://v3.pusatfilm21info.com&size=%size%",
+        "fileHash": "sha256-1aa56c2ceca9955af12443ed93d790cb718a6e2f6dbd3a87134cb4f196e03302",
+        "apiVersion": 1,
+        "repositoryUrl": "https://github.com/Pendztagram/ex",
+        "fileSize": 30877,
+        "status": 1,
+        "language": "id",
+        "authors": [
+            "Duro92"
+        ],
+        "tvTypes": [
+            "AsianDrama",
+            "TvSeries",
+            "Movie"
+        ],
+        "version": 1,
+        "internalName": "Pusatfilm21Provider",
+        "description": "Pusatfilm21",
+        "url": "https://raw.githubusercontent.com/Pendztagram/ex/builds/Pusatfilm21Provider.cs3",
+        "name": "Pusatfilm21Provider"
+    },
+    {
         "iconUrl": "https://t2.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=https://v1.samehadaku.how&size=%size%",
         "fileHash": "sha256-7c6ecee00e6e308efc5ee774d10b0d375b2b84f7540687906c0b48b0745e0845",
         "apiVersion": 1,
