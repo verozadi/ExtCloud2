@@ -244,7 +244,10 @@ class Pusatfilm21Provider : MainAPI() {
     private fun Element.toEpisode(): Episode? {
         val href = normalizeUrl(attr("href"), mainUrl) ?: return null
         val label = text().replace(Regex("""\s+"""), " ").trim()
-        val title = attr("title").substringAfter("Permalink to", "").ifBlank { label }.trim()
+        val title = attr("title")
+            .substringAfter("Permalink to", "")
+            .ifBlank { label }
+            .cleanTitle()
         val episodeNumber =
             Regex("""(?:eps?|episode)\s*(\d+)""", RegexOption.IGNORE_CASE)
                 .find(label.ifBlank { title })
@@ -355,10 +358,13 @@ class Pusatfilm21Provider : MainAPI() {
     private fun String.cleanTitle(): String {
         return Jsoup.parse(this).text()
             .replace(Regex("""(?i)^Permalink to:\s*"""), "")
-            .replace(Regex("""(?i)^Nonton\s+(?:Film|Series)\s+"""), "")
-            .replace(Regex("""(?i)\s+Sub Indo$"""), "")
-            .replace(Regex("""(?i)\s+Subtitle Indonesia$"""), "")
+            .replace(Regex("""(?i)^Nonton\s+(?:Film|Movie|Series|Serial|Drama)\s+"""), "")
+            .replace(Regex("""(?i)\s+(?:Sub\s*Indo|Subtitle\s*Indonesia)\b.*$"""), "")
+            .replace(Regex("""(?i)\s*(?:\||-|–|—)\s*(?:Pusat\s*Film\s*21|Pusatfilm21)(?:\.\w+)?\s*$"""), "")
+            .replace(Regex("""(?i)\b(?:Pusat\s*Film\s*21|Pusatfilm21)(?:\.\w+)?\b"""), "")
+            .replace(Regex("""(?i)\b(?:Streaming\s+Online|Trending\s+Viral|Gratis|Terbaru)\b"""), "")
             .replace(Regex("""\s+"""), " ")
+            .replace(Regex("""\s*(?:\||-|–|—)\s*$"""), "")
             .trim()
     }
 
