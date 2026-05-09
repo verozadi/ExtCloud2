@@ -412,6 +412,27 @@
         "name": "Funmovieslix"
     },
     {
+        "iconUrl": "https://t2.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=https://gojodesu.com&size=%size%",
+        "fileHash": "sha256-74af4008403d816b2b403843cdf2368edd5d38d059ba8da1951f4364354c497e",
+        "apiVersion": 1,
+        "repositoryUrl": "https://github.com/Pendztagram/ex",
+        "fileSize": 23508,
+        "status": 1,
+        "language": "id",
+        "authors": [
+            "duro92"
+        ],
+        "tvTypes": [
+            "AnimeMovie",
+            "OVA",
+            "Anime"
+        ],
+        "version": 1,
+        "internalName": "GojodesuProvider",
+        "url": "https://raw.githubusercontent.com/Pendztagram/ex/builds/GojodesuProvider.cs3",
+        "name": "GojodesuProvider"
+    },
+    {
         "iconUrl": "https://t2.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=https://v8.hidoristream.online&size=%size%",
         "fileHash": "sha256-a199cce70aac1d0f8fa8faab152d41c44a88dc0011a501cbcc1913ee6b2e702e",
         "apiVersion": 1,
