@@ -252,7 +252,9 @@ class Hidoristream : MainAPI() {
             val url = a.attr("href").trim()
             if (url.isBlank()) continue
 
-            val fixedUrl = httpsify(url)
+            val fixedUrl = normalizeMirrorUrl(url, data) ?: continue
+            if (shouldSkipDownloadLink(fixedUrl)) continue
+
             val host = fixedUrl.substringAfter("://").substringBefore("/").substringBefore("?")
             val qualityText = a.parents()
                 .select("strong")
@@ -263,19 +265,13 @@ class Hidoristream : MainAPI() {
                 ?: "Download"
             val label = a.text().trim().ifBlank { host }
 
-            loadExtractor(fixedUrl, data, subtitleCallback, callback)
-
-            callback.invoke(
-                newExtractorLink(
-                    source = name,
-                    name = "$name Download - $qualityText - $label",
-                    url = fixedUrl,
-                    type = INFER_TYPE,
-                ) {
-                    this.referer = data
-                    this.quality = getQualityFromName(qualityText)
+            if (isDirectMedia(fixedUrl)) {
+                resolveMirrorLink(fixedUrl, "$qualityText - $label", data, emitted, subtitleCallback, callback)
+            } else {
+                runCatching {
+                    loadExtractor(fixedUrl, data, subtitleCallback, callback)
                 }
-            )
+            }
         }
 
         return true
@@ -378,6 +374,13 @@ class Hidoristream : MainAPI() {
         return lower.contains("facebook.com/plugins") ||
             lower.contains("histats.com") ||
             lower.contains("about:blank")
+    }
+
+    private fun shouldSkipDownloadLink(url: String): Boolean {
+        val host = url.substringAfter("://").substringBefore("/").lowercase()
+        return host == "t.me" ||
+            host.endsWith(".telegram.org") ||
+            url.contains("hidoristream", true)
     }
 
     private fun Element.getImageAttr(): String {
