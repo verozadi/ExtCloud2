@@ -9,6 +9,7 @@ import com.lagradost.cloudstream3.utils.*
 import com.lagradost.nicehttp.NiceResponse
 import com.lagradost.nicehttp.RequestBodyTypes
 import com.lagradost.cloudstream3.utils.AppUtils.tryParseJson
+import org.json.JSONArray
 import org.json.JSONObject
 import com.fasterxml.jackson.annotation.JsonProperty
 import okhttp3.Interceptor
@@ -923,6 +924,172 @@ object SoraExtractor : SoraStream() {
         }
 
         invokeWebviewEmbedSource("Cinezo", url, "$cinezoAPI/", cinezoAPI, callback, useOkhttp = false)
+    }
+
+    suspend fun invokeMapple(
+        tmdbId: Int?,
+        season: Int?,
+        episode: Int?,
+        callback: (ExtractorLink) -> Unit,
+    ) {
+        val id = tmdbId ?: return
+        val url = if (season == null) {
+            "$mappleAPI/watch/movie/$id"
+        } else {
+            "$mappleAPI/watch/tv/$id-$season-$episode"
+        }
+
+        invokeWebviewEmbedSource("Mapple", url, "$mappleAPI/", mappleAPI, callback, useOkhttp = false)
+    }
+
+    suspend fun invokeCinemaos(
+        tmdbId: Int?,
+        season: Int?,
+        episode: Int?,
+        callback: (ExtractorLink) -> Unit,
+    ) {
+        val id = tmdbId ?: return
+        val url = if (season == null) {
+            "$cinemaosAPI/player/$id"
+        } else {
+            "$cinemaosAPI/player/$id/$season/$episode"
+        }
+
+        invokeWebviewEmbedSource("CinemaOS", url, "$cinemaosAPI/", cinemaosAPI, callback, useOkhttp = false)
+    }
+
+    suspend fun invokeXprime(
+        tmdbId: Int?,
+        imdbId: String?,
+        title: String?,
+        year: Int?,
+        season: Int?,
+        episode: Int?,
+        subtitleCallback: (SubtitleFile) -> Unit,
+        callback: (ExtractorLink) -> Unit,
+    ) {
+        val id = tmdbId ?: return
+        val token = app.get(
+            "https://enc-dec.app/api/enc-xprime",
+            headers = mapOf("Accept" to "application/json", "User-Agent" to USER_AGENT),
+        ).text.let { JSONObject(it).optString("result") }.takeIf { it.isNotBlank() } ?: return
+
+        val headers = mapOf(
+            "User-Agent" to USER_AGENT,
+            "Origin" to "https://xprime.tv",
+            "Referer" to "https://xprime.tv/",
+            "Accept" to "application/json,text/plain,*/*",
+        )
+        val encodedToken = token.urlEncodeCompat()
+        val servers = buildList {
+            val query = buildString {
+                append("name=${(title ?: "").urlEncodeCompat()}")
+                year?.let { append("&fallback_year=$it") }
+                if (season != null && episode != null) append("&season=$season&episode=$episode")
+            }
+            add("primebox" to "$xprimeAPI/primebox?$query&turnstile=$encodedToken")
+            if (season == null || episode != null) {
+                val rageQuery = if (season == null) {
+                    "id=$id"
+                } else {
+                    "id=$id&season=$season&episode=$episode"
+                }
+                add("rage" to "$xprimeAPI/rage?$rageQuery&turnstile=$encodedToken")
+            }
+        }
+
+        servers.forEach { (server, url) ->
+            val responseText = runCatching { app.get(url, headers = headers).text }.getOrNull() ?: return@forEach
+            val data = if (responseText.trim().startsWith("{")) {
+                JSONObject(responseText)
+            } else {
+                decryptXprimeResponse(responseText) ?: return@forEach
+            }
+            emitXprimeLinks(server, data, headers, subtitleCallback, callback)
+        }
+    }
+
+    private suspend fun decryptXprimeResponse(text: String): JSONObject? {
+        val response = app.post(
+            "https://enc-dec.app/api/dec-xprime",
+            requestBody = JSONObject(mapOf("text" to text)).toString()
+                .toRequestBody(RequestBodyTypes.JSON.toMediaTypeOrNull()),
+            headers = mapOf(
+                "Content-Type" to "application/json",
+                "Accept" to "application/json",
+                "User-Agent" to USER_AGENT,
+            ),
+        ).text
+        val json = JSONObject(response)
+        if (json.optInt("status") != 200) return null
+        val result = json.opt("result") ?: return null
+        return when (result) {
+            is JSONObject -> result
+            is String -> JSONObject(result)
+            else -> null
+        }
+    }
+
+    private suspend fun emitXprimeLinks(
+        server: String,
+        data: JSONObject,
+        headers: Map<String, String>,
+        subtitleCallback: (SubtitleFile) -> Unit,
+        callback: (ExtractorLink) -> Unit,
+    ) {
+        val sourceName = "XPrime ${server.replaceFirstChar { it.uppercase() }}"
+        data.optJSONArray("subtitles")?.let { subtitles ->
+            for (index in 0 until subtitles.length()) {
+                val subtitle = subtitles.optJSONObject(index) ?: continue
+                val file = subtitle.optString("file").takeIf { it.isNotBlank() } ?: continue
+                subtitleCallback.invoke(newSubtitleFile(subtitle.optString("label").ifBlank { "Unknown" }, file))
+            }
+        }
+
+        if (server == "primebox") {
+            val streams = data.optJSONObject("streams")
+            val qualities = data.optJSONArray("available_qualities") ?: JSONArray()
+            if (streams != null && qualities.length() > 0) {
+                for (index in 0 until qualities.length()) {
+                    val quality = qualities.optString(index)
+                    emitXprimeLink(sourceName, quality, streams.optString(quality), headers, callback)
+                }
+                return
+            }
+        }
+
+        data.optJSONArray("qualities")?.let { qualities ->
+            for (index in 0 until qualities.length()) {
+                val item = qualities.optJSONObject(index) ?: continue
+                emitXprimeLink(sourceName, item.optString("quality"), item.optString("url"), headers, callback)
+            }
+        }
+
+        emitXprimeLink(sourceName, data.optString("quality"), data.optString("url"), headers, callback)
+    }
+
+    private suspend fun emitXprimeLink(
+        sourceName: String,
+        qualityText: String?,
+        url: String?,
+        headers: Map<String, String>,
+        callback: (ExtractorLink) -> Unit,
+    ) {
+        val streamUrl = url?.trim()?.takeIf { it.startsWith("http", true) } ?: return
+        val quality = getIndexQuality(qualityText ?: streamUrl)
+        if (streamUrl.contains(".m3u8", true)) {
+            M3u8Helper.generateM3u8(sourceName, streamUrl, "https://xprime.tv/", headers = headers)
+                .forEach(callback)
+            return
+        }
+
+        callback.invoke(
+            newExtractorLink(sourceName, sourceName, streamUrl, INFER_TYPE) {
+                this.quality = quality
+                this.referer = "https://xprime.tv/"
+                this.headers = headers
+            }
+        )
     }
 
     suspend fun invokeWave(

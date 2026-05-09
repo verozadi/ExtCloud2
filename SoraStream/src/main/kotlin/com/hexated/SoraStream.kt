@@ -11,6 +11,9 @@ import com.hexated.SoraExtractor.invokeVixsrc
 import com.hexated.SoraExtractor.invokeVideasy
 import com.hexated.SoraExtractor.invokeVidzen
 import com.hexated.SoraExtractor.invokeCinezo
+import com.hexated.SoraExtractor.invokeXprime
+import com.hexated.SoraExtractor.invokeMapple
+import com.hexated.SoraExtractor.invokeCinemaos
 import com.hexated.SoraExtractor.invokeWave
 import com.hexated.SoraExtractor.invokeUhdmovies
 import com.hexated.SoraExtractor.invokeMultimovies
@@ -102,6 +105,9 @@ open class SoraStream(val sharedPref: SharedPreferences? = null) : TmdbProvider(
         const val videasyAPI = "https://player.videasy.net"
         const val vidzenAPI = "https://vidzen.fun"
         const val cinezoAPI = "https://player.cinezo.live"
+        const val xprimeAPI = "https://backend.xprime.tv"
+        const val mappleAPI = "https://mapple.uk"
+        const val cinemaosAPI = "https://cinemaos.tech"
         const val waveAPI = "https://wavembed.lol"
         const val uhdmoviesAPI = "https://uhdmovies.pink"
         const val multimoviesAPI = "https://multimovies.fyi"
@@ -145,7 +151,10 @@ open class SoraStream(val sharedPref: SharedPreferences? = null) : TmdbProvider(
             SourceDescriptor("vixsrc", SourceGroup.EMBED, 50),
             SourceDescriptor("vidzen", SourceGroup.EMBED, 55),
             SourceDescriptor("cinezo", SourceGroup.EMBED, 58),
+            SourceDescriptor("xprime", SourceGroup.EMBED, 59),
             SourceDescriptor("cinesrc", SourceGroup.EMBED, 60),
+            SourceDescriptor("mapple", SourceGroup.EMBED, 62),
+            SourceDescriptor("cinemaos", SourceGroup.EMBED, 64),
             SourceDescriptor("mafiaembed", SourceGroup.EMBED, 70),
             SourceDescriptor("autoembed", SourceGroup.EMBED, 80),
             SourceDescriptor("2embed", SourceGroup.EMBED, 90),
@@ -488,6 +497,9 @@ open class SoraStream(val sharedPref: SharedPreferences? = null) : TmdbProvider(
             "videasy" -> invokeVideasy(res.id, res.season, res.episode, callback)
             "vidzen" -> invokeVidzen(res.id, res.season, res.episode, callback)
             "cinezo" -> invokeCinezo(res.id, res.season, res.episode, callback)
+            "xprime" -> invokeXprime(res.id, res.imdbId, res.title, res.year, res.season, res.episode, subtitleCallback, callback)
+            "mapple" -> invokeMapple(res.id, res.season, res.episode, callback)
+            "cinemaos" -> invokeCinemaos(res.id, res.season, res.episode, callback)
             "cinesrc" -> invokeCineSrc(res.id, res.season, res.episode, callback)
             "mafiaembed" -> invokeMafiaEmbed(res.id, res.season, res.episode, callback)
             "autoembed" -> invokeAutoEmbed(res.id, res.season, res.episode, subtitleCallback, callback)
