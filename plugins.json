@@ -413,10 +413,10 @@
     },
     {
         "iconUrl": "https://t2.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=https://v8.hidoristream.online&size=%size%",
-        "fileHash": "sha256-c9e41d58924d74a3842fc6ef35bc4be3ddcbb836db53a6ee0af23ceefbae360e",
+        "fileHash": "sha256-f5b04b31dfbdd4d2ff87e32157e13dab369b1cc62853a36560e653c5b983184f",
         "apiVersion": 1,
         "repositoryUrl": "https://github.com/Pendztagram/ex",
-        "fileSize": 40582,
+        "fileSize": 40905,
         "status": 1,
         "language": "id",
         "authors": [
