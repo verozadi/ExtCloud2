@@ -21,6 +21,8 @@ class HidoristreamPlugin : Plugin() {
         registerExtractorAPI(Streamcasthub())
         registerExtractorAPI(Dm21upns())
         registerExtractorAPI(Dm21())
+        registerExtractorAPI(Pm21p2p())
+        registerExtractorAPI(Meplayer())
         registerExtractorAPI(Dintezuvio())
         registerExtractorAPI(Dm21embed())
         registerExtractorAPI(Veev())

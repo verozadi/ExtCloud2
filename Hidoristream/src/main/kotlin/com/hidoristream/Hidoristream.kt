@@ -11,7 +11,7 @@ import org.jsoup.Jsoup
 import org.jsoup.nodes.Element
 
 class Hidoristream : MainAPI() {
-    override var mainUrl = "https://v2.hidoristream.online"
+    override var mainUrl = "https://v8.hidoristream.online"
     override var name = "Hidoristream🐹"
     override val hasMainPage = true
     override var lang = "id"
@@ -230,31 +230,19 @@ class Hidoristream : MainAPI() {
         callback: (ExtractorLink) -> Unit
     ): Boolean {
         val document = app.get(data).document
+        val emitted = linkedSetOf<String>()
 
         document.selectFirst("div.player-embed iframe")
             ?.getIframeAttr()
             ?.let { iframe ->
-                loadExtractor(httpsify(iframe), data, subtitleCallback, callback)
+                resolveMirrorLink(iframe, "Player", data, emitted, subtitleCallback, callback)
             }
 
         val mirrorOptions = document.select("select.mirror option[value]:not([disabled])")
         for (opt in mirrorOptions) {
-            val base64 = opt.attr("value")
-            if (base64.isBlank()) continue
-            try {
-                val cleaned = base64.replace("\\s".toRegex(), "")
-                val decodedHtml = base64Decode(cleaned)
-                val iframeTag = Jsoup.parse(decodedHtml).selectFirst("iframe")
-                val mirrorUrl = when {
-                    iframeTag?.attr("src")?.isNotBlank() == true -> iframeTag.attr("src")
-                    iframeTag?.attr("data-src")?.isNotBlank() == true -> iframeTag.attr("data-src")
-                    else -> null
-                }
-                if (!mirrorUrl.isNullOrBlank()) {
-                    loadExtractor(httpsify(mirrorUrl), data, subtitleCallback, callback)
-                }
-            } catch (_: Exception) {
-                // ignore broken mirrors
+            val label = opt.text().trim().ifBlank { "Mirror" }
+            decodeMirrorLinks(opt.attr("value")).forEach { mirrorUrl ->
+                resolveMirrorLink(mirrorUrl, label, data, emitted, subtitleCallback, callback)
             }
         }
 
@@ -291,6 +279,105 @@ class Hidoristream : MainAPI() {
         }
 
         return true
+    }
+
+    private fun decodeMirrorLinks(value: String): List<String> {
+        if (value.isBlank()) return emptyList()
+
+        val decodedHtml = runCatching {
+            base64Decode(value.replace("\\s".toRegex(), ""))
+        }.getOrElse { value }
+
+        val links = linkedSetOf<String>()
+        val mirrorDoc = Jsoup.parse(decodedHtml)
+        mirrorDoc.select("iframe[src], iframe[data-src], source[src], video[src], a[href]").forEach { element ->
+            val rawUrl = element.attr("src")
+                .ifBlank { element.attr("data-src") }
+                .ifBlank { element.attr("href") }
+            normalizeMirrorUrl(rawUrl, mainUrl)?.let(links::add)
+        }
+
+        Regex("""https?://[^\s"'<>\\]+""", RegexOption.IGNORE_CASE)
+            .findAll(decodedHtml)
+            .mapNotNull { normalizeMirrorUrl(it.value, mainUrl) }
+            .forEach(links::add)
+
+        return links.filterNot(::isNoiseFrame)
+    }
+
+    private suspend fun resolveMirrorLink(
+        rawUrl: String,
+        label: String,
+        referer: String,
+        emitted: MutableSet<String>,
+        subtitleCallback: (SubtitleFile) -> Unit,
+        callback: (ExtractorLink) -> Unit,
+    ) {
+        val normalized = normalizeMirrorUrl(rawUrl, referer) ?: return
+        if (!emitted.add(normalized)) return
+
+        if (isDirectMedia(normalized)) {
+            callback(
+                newExtractorLink(
+                    source = name,
+                    name = "$name - $label",
+                    url = normalized,
+                    type = INFER_TYPE,
+                ) {
+                    this.referer = referer
+                    this.quality = getQualityFromName(label)
+                    this.headers = mapOf("Referer" to referer, "User-Agent" to USER_AGENT)
+                }
+            )
+            return
+        }
+
+        val resolvedUrl = if (normalized.contains("short.icu", true)) {
+            runCatching {
+                app.get(
+                    normalized,
+                    referer = referer,
+                    allowRedirects = true,
+                    headers = mapOf("User-Agent" to USER_AGENT),
+                ).url
+            }.getOrDefault(normalized)
+        } else {
+            normalized
+        }
+
+        runCatching {
+            loadExtractor(resolvedUrl, referer, subtitleCallback, callback)
+        }
+    }
+
+    private fun normalizeMirrorUrl(rawUrl: String, baseUrl: String): String? {
+        val clean = rawUrl.trim()
+            .replace("\\/", "/")
+            .replace("&amp;", "&")
+            .takeIf {
+                it.isNotBlank() &&
+                    !it.startsWith("javascript:", true) &&
+                    !it.startsWith("data:", true)
+            }
+            ?: return null
+
+        return when {
+            clean.startsWith("//") -> "https:$clean"
+            clean.startsWith("http://", true) || clean.startsWith("https://", true) -> httpsify(clean)
+            else -> runCatching { java.net.URI(baseUrl).resolve(clean).toString() }.getOrNull()?.let(::httpsify)
+        }
+    }
+
+    private fun isDirectMedia(url: String): Boolean {
+        return Regex("""(?i)\.(m3u8|mp4)(?:$|[?#&])""").containsMatchIn(url) ||
+            url.contains("/stream/", true)
+    }
+
+    private fun isNoiseFrame(url: String): Boolean {
+        val lower = url.lowercase()
+        return lower.contains("facebook.com/plugins") ||
+            lower.contains("histats.com") ||
+            lower.contains("about:blank")
     }
 
     private fun Element.getImageAttr(): String {
