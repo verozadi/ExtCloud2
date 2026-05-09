@@ -1,6 +1,7 @@
 package com.hidoristream
 
 import com.lagradost.cloudstream3.app
+import com.lagradost.cloudstream3.base64Decode
 import com.lagradost.cloudstream3.utils.ExtractorApi
 import com.lagradost.cloudstream3.utils.ExtractorLink
 import com.lagradost.cloudstream3.utils.*
@@ -18,6 +19,187 @@ import com.lagradost.cloudstream3.utils.newExtractorLink
 import org.json.JSONObject
 import com.lagradost.cloudstream3.utils.HlsPlaylistParser
 import com.lagradost.cloudstream3.utils.INFER_TYPE
+import okhttp3.MediaType.Companion.toMediaTypeOrNull
+import okhttp3.RequestBody.Companion.toRequestBody
+import org.mozilla.javascript.Context
+import org.mozilla.javascript.Scriptable
+
+class HidoristreamPlayer : ExtractorApi() {
+    override val name = "Hidoristream"
+    override val mainUrl = "https://stream.hidoristream.my.id"
+    override val requiresReferer = true
+
+    override suspend fun getUrl(
+        url: String,
+        referer: String?,
+        subtitleCallback: (SubtitleFile) -> Unit,
+        callback: (ExtractorLink) -> Unit
+    ) {
+        val embedUrl = normalizeEmbedUrl(url)
+        val headers = mapOf(
+            "User-Agent" to USER_AGENT,
+            "Accept" to "*/*",
+            "X-Requested-With" to "XMLHttpRequest",
+        )
+        val page = app.get(embedUrl, referer = referer ?: "$mainUrl/", headers = mapOf("User-Agent" to USER_AGENT)).text
+        val vars = extractPlayerVars(page) ?: return
+        val apiBase = vars.baseUrl.ifBlank { "$mainUrl/" }
+        val apiUrl = "${apiBase.trimEnd('/')}/api/?p=${vars.ps}"
+        val encryptedSources = app.post(
+            apiUrl,
+            referer = embedUrl,
+            headers = headers,
+            requestBody = vars.kaken.toRequestBody("text/plain".toMediaTypeOrNull()),
+        ).text
+
+        val cryptoJs = runCatching {
+            app.get("$mainUrl/assets/vendor/crypto-js/4.2.0/crypto-js.min.js", headers = mapOf("User-Agent" to USER_AGENT)).text
+        }.getOrNull() ?: return
+        val sourceJson = decryptPlayerResponse(encryptedSources, vars.pd, cryptoJs) ?: return
+        val sources = runCatching { JSONObject(sourceJson).optJSONArray("sources") }.getOrNull() ?: return
+
+        for (i in 0 until sources.length()) {
+            val item = sources.optJSONObject(i) ?: continue
+            val file = item.optString("file").trim().takeIf { it.isNotBlank() } ?: continue
+            val label = item.optString("label").trim().ifBlank { "Stream" }
+            callback(
+                newExtractorLink(
+                    source = name,
+                    name = "$name $label",
+                    url = file,
+                    type = INFER_TYPE,
+                ) {
+                    this.referer = embedUrl
+                    this.quality = getQualityFromName(label)
+                    this.headers = mapOf("Referer" to embedUrl, "User-Agent" to USER_AGENT)
+                }
+            )
+        }
+    }
+
+    private fun normalizeEmbedUrl(url: String): String {
+        return when {
+            url.startsWith("//") -> "https:$url"
+            url.startsWith("http", true) -> url
+            url.startsWith("/") -> "$mainUrl$url"
+            else -> "$mainUrl/$url"
+        }
+    }
+
+    private fun extractPlayerVars(html: String): PlayerVars? {
+        val script = Regex("""<script[^>]*>([\s\S]*?)</script>""", RegexOption.IGNORE_CASE)
+            .findAll(html)
+            .map { it.groupValues[1] }
+            .firstOrNull { it.length > 10_000 }
+            ?: return null
+
+        var result: PlayerVars? = null
+        val runner = Runnable {
+            val rhino = Context.enter()
+            rhino.optimizationLevel = -1
+            val scope = rhino.initSafeStandardObjects()
+            scope.put("window", scope, scope)
+            try {
+                rhino.evaluateString(scope, script, "HidoristreamPlayerVars", 1, null)
+                fun getVar(key: String): String {
+                    val value = scope.get(key, scope)
+                    return if (value == Scriptable.NOT_FOUND) "" else Context.toString(value)
+                }
+
+                val baseUrl = getVar("baseURL")
+                val apx = getVar("apx")
+                val kaken = getVar("kaken")
+                val ps = getVar("ps")
+                val pd = getVar("pd")
+                if (kaken.isNotBlank() && ps.isNotBlank() && pd.isNotBlank()) {
+                    result = PlayerVars(
+                        baseUrl = baseUrl,
+                        apiConfigBase = runCatching { base64Decode(apx.replace(',', '=')) }.getOrDefault(""),
+                        kaken = kaken,
+                        ps = ps,
+                        pd = pd,
+                    )
+                }
+            } catch (e: Exception) {
+                Log.e("HidoristreamPlayer", "Failed to decode player vars: ${e.message}")
+            } finally {
+                Context.exit()
+            }
+        }
+        val thread = Thread(ThreadGroup("HidoristreamPlayer"), runner, "thread_hidoristream_vars", 8 * 1024 * 1024)
+        thread.start()
+        thread.join()
+        thread.interrupt()
+        return result
+    }
+
+    private fun decryptPlayerResponse(encrypted: String, pd: String, cryptoJs: String): String? {
+        if (encrypted.trim().startsWith("{")) return encrypted
+
+        var result: String? = null
+        val runner = Runnable {
+            val rhino = Context.enter()
+            rhino.optimizationLevel = -1
+            val scope = rhino.initSafeStandardObjects()
+            scope.put("window", scope, scope)
+            scope.put("encryptedResponse", scope, encrypted)
+            scope.put("pd", scope, pd)
+            try {
+                rhino.evaluateString(scope, cryptoJs, "CryptoJS", 1, null)
+                rhino.evaluateString(scope, DCX_SCRIPT, "HidoristreamDcx", 1, null)
+                result = Context.toString(rhino.evaluateString(scope, "dcx(encryptedResponse);", "HidoristreamDecrypt", 1, null))
+            } catch (e: Exception) {
+                Log.e("HidoristreamPlayer", "Failed to decrypt player response: ${e.message}")
+            } finally {
+                Context.exit()
+            }
+        }
+        val thread = Thread(ThreadGroup("HidoristreamPlayer"), runner, "thread_hidoristream_decrypt", 8 * 1024 * 1024)
+        thread.start()
+        thread.join()
+        thread.interrupt()
+        return result
+    }
+
+    data class PlayerVars(
+        val baseUrl: String,
+        val apiConfigBase: String,
+        val kaken: String,
+        val ps: String,
+        val pd: String,
+    )
+
+    companion object {
+        private val DCX_SCRIPT = """
+            function dcx(text) {
+                try {
+                    if (text.indexOf("{") === 0) return text;
+                    var parsed = CryptoJS.enc.Base64.parse(text);
+                    var salt = CryptoJS.lib.WordArray.create(parsed.words.slice(0, 4));
+                    var ciphertext = CryptoJS.lib.WordArray.create(parsed.words.slice(4));
+                    var keyData = CryptoJS.PBKDF2(pd, salt, {
+                        keySize: 12,
+                        iterations: 10000,
+                        hasher: CryptoJS.algo.SHA512
+                    });
+                    var key = CryptoJS.lib.WordArray.create(keyData.words.slice(0, 8));
+                    var iv = CryptoJS.lib.WordArray.create(keyData.words.slice(8, 12));
+                    return CryptoJS.AES.decrypt(
+                        { ciphertext: ciphertext },
+                        key,
+                        {
+                            iv: iv,
+                            mode: CryptoJS.mode.CBC,
+                            padding: CryptoJS.pad.Pkcs7
+                        }
+                    ).toString(CryptoJS.enc.Utf8);
+                } catch (e) {
+                    return "";
+                }
+            }
+        """.trimIndent()
+    }
+}
 
 class Movearnpre : Dingtezuni() {
     override var name = "Movearnpre"

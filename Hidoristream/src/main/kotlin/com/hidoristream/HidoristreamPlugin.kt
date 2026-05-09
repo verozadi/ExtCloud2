@@ -10,6 +10,7 @@ class HidoristreamPlugin : Plugin() {
     override fun load(context: Context) {
         Hidoristream.context = context
         registerMainAPI(Hidoristream())
+        registerExtractorAPI(HidoristreamPlayer())
         registerExtractorAPI(Dingtezuni())
         registerExtractorAPI(Bingezove())
         registerExtractorAPI(Mivalyo())

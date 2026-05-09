@@ -232,15 +232,17 @@ class Hidoristream : MainAPI() {
         val document = app.get(data).document
         val emitted = linkedSetOf<String>()
 
-        document.selectFirst("div.player-embed iframe")
-            ?.getIframeAttr()
-            ?.let { iframe ->
+        document.select("#pembed iframe, div.player-embed iframe, .video-content iframe")
+            .mapNotNull { it.getIframeAttr() }
+            .distinct()
+            .forEach { iframe ->
                 resolveMirrorLink(iframe, "Player", data, emitted, subtitleCallback, callback)
             }
 
         val mirrorOptions = document.select("select.mirror option[value]:not([disabled])")
         for (opt in mirrorOptions) {
             val label = opt.text().trim().ifBlank { "Mirror" }
+            if (isSupportMirrorLabel(label)) continue
             decodeMirrorLinks(opt.attr("value")).forEach { mirrorUrl ->
                 resolveMirrorLink(mirrorUrl, label, data, emitted, subtitleCallback, callback)
             }
@@ -381,6 +383,11 @@ class Hidoristream : MainAPI() {
         return host == "t.me" ||
             host.endsWith(".telegram.org") ||
             url.contains("hidoristream", true)
+    }
+
+    private fun isSupportMirrorLabel(label: String): Boolean {
+        return label.contains("support", true) ||
+            label.contains("tetap aktif", true)
     }
 
     private fun Element.getImageAttr(): String {
