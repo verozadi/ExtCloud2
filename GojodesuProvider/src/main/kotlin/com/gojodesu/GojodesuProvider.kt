@@ -17,7 +17,7 @@ class GojodesuProvider : MainAPI() {
     override var name = "GojoDesu"
     override var lang = "id"
     override val hasMainPage = true
-    override val hasDownloadSupport = false
+    override val hasDownloadSupport = true
 
     override val supportedTypes = setOf(
         TvType.Anime,
@@ -36,11 +36,22 @@ class GojodesuProvider : MainAPI() {
     )
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
-        val document = app.get(pageUrl(request.data, page), referer = "$mainUrl/").document
-        val items = document.toSearchResults()
+        val documents = if (request.data.contains("type=ova", true)) {
+            val fallbackTypes = listOf("ova", "special", "ona", "bd")
+            fallbackTypes.mapNotNull { type ->
+                val data = request.data.replace(Regex("""type=[^&]*"""), "type=$type")
+                runCatching { app.get(pageUrl(data, page), referer = "$mainUrl/").document }.getOrNull()
+            }
+        } else {
+            listOf(app.get(pageUrl(request.data, page), referer = "$mainUrl/").document)
+        }
+
+        val items = documents.flatMap { it.toSearchResults() }.distinctBy { it.url }
         val hasNext =
-            document.select("a.next.page-numbers, .pagination a[href*='/page/${page + 1}/'], a[href*='/page/${page + 1}/']")
-                .isNotEmpty()
+            documents.any {
+                it.select("a.next.page-numbers, .pagination a[href*='/page/${page + 1}/'], a[href*='/page/${page + 1}/']")
+                    .isNotEmpty()
+            }
 
         return newHomePageResponse(request.name, items, hasNext = hasNext)
     }
@@ -211,7 +222,10 @@ class GojodesuProvider : MainAPI() {
         val text = value.orEmpty()
         return when {
             text.contains("movie", true) || url.contains("movie", true) -> TvType.AnimeMovie
-            text.contains("ova", true) || text.contains("special", true) -> TvType.OVA
+            text.contains("ova", true) ||
+                text.contains("special", true) ||
+                text.contains("ona", true) ||
+                text.contains("bd", true) -> TvType.OVA
             else -> TvType.Anime
         }
     }
