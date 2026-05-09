@@ -30,7 +30,6 @@ class GojodesuProvider : MainAPI() {
         "/anime/?status=&type=&order=latest" to "Anime Terbaru",
         "/anime/?status=ongoing&type=&order=update" to "Ongoing",
         "/anime/?status=completed&type=&order=update" to "Completed",
-        "/anime/?status=&type=movie&order=update" to "Movie",
         "/anime/?status=&type=ova&order=update" to "OVA",
         "/anime/?status=&type=&order=popular" to "Popular",
     )
