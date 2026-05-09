@@ -413,10 +413,10 @@
     },
     {
         "iconUrl": "https://t2.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=https://gojodesu.com&size=%size%",
-        "fileHash": "sha256-74af4008403d816b2b403843cdf2368edd5d38d059ba8da1951f4364354c497e",
+        "fileHash": "sha256-4d5242f43a20fb50dcff2dd395559e633785d8120992e8bad702fe6bfe783955",
         "apiVersion": 1,
         "repositoryUrl": "https://github.com/Pendztagram/ex",
-        "fileSize": 23508,
+        "fileSize": 25430,
         "status": 1,
         "language": "id",
         "authors": [
