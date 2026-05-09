@@ -14,7 +14,7 @@ import java.net.URLEncoder
 
 class GojodesuProvider : MainAPI() {
     override var mainUrl = "https://gojodesu.com"
-    override var name = "GojoDesu"
+    override var name = "GojoDesu🐹"
     override var lang = "id"
     override val hasMainPage = true
     override val hasDownloadSupport = true
