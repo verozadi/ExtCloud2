@@ -1097,6 +1097,29 @@ object SoraExtractor : SoraAnime() {
         }
     }
 
+    suspend fun invokeInstalledAnimeProviders(
+        titleCandidates: List<String>,
+        season: Int?,
+        episode: Int?,
+        subtitleCallback: (SubtitleFile) -> Unit,
+        callback: (ExtractorLink) -> Unit,
+    ) {
+        installedAnimeProviders().forEach { provider ->
+            runCatching {
+                val searchResult = provider.search(titleCandidates.firstOrNull() ?: return@forEach).orEmpty()
+                    .firstOrNull { result ->
+                        providerSearchAllowed(result) && animeTitleMatches(result.name, titleCandidates)
+                    } ?: return@forEach
+
+                val loadResponse = provider.load(searchResult.url) ?: return@forEach
+                val episodeData = loadResponseEpisodeData(loadResponse, episode)
+                episodeData.forEach { data ->
+                    provider.loadLinks(data, false, subtitleCallback, callback)
+                }
+            }.onFailure { logError(it) }
+        }
+    }
+
     private data class AnimeTitleMatch(val title: String, val url: String)
 
     private suspend fun findAniWaveTitle(titleCandidates: List<String>): AnimeTitleMatch? {
@@ -1300,6 +1323,109 @@ object SoraExtractor : SoraAnime() {
             "Accept" to "application/json, text/javascript, */*; q=0.01",
             "X-Requested-With" to "XMLHttpRequest",
         )
+    }
+
+    private fun installedAnimeProviders(): List<MainAPI> {
+        val allowedNames = setOf(
+            "samehadaku",
+            "otakudesu",
+            "anoboy",
+            "kuramanime",
+            "kuronime",
+            "nekokun",
+            "nimegami",
+            "oploverz",
+            "anixcafe",
+            "animexin",
+            "animesail",
+            "animasu",
+            "anichin",
+            "auratail",
+            "gojodesu",
+            "hidoristream",
+            "nontonanimeid",
+            "zoronime",
+        )
+        val apiHolder = APIHolder::class.java
+        return listOf("apis", "allProviders", "allApis", "apiProviders")
+            .firstNotNullOfOrNull { fieldName ->
+                runCatching {
+                    val field = apiHolder.getDeclaredField(fieldName)
+                    field.isAccessible = true
+                    @Suppress("UNCHECKED_CAST")
+                    (field.get(APIHolder) as? List<MainAPI>)?.filter { api ->
+                        api.name != name &&
+                            api.supportedTypes.any { it == TvType.Anime || it == TvType.AnimeMovie || it == TvType.OVA } &&
+                            allowedNames.any { allowed -> normalizeProviderName(api.name).contains(allowed) }
+                    }
+                }.getOrNull()
+            }.orEmpty()
+    }
+
+    private fun providerSearchAllowed(result: SearchResponse): Boolean {
+        return result.type == TvType.Anime || result.type == TvType.AnimeMovie || result.type == TvType.OVA
+    }
+
+    private fun loadResponseEpisodeData(response: LoadResponse, episode: Int?): List<String> {
+        val episodes = extractEpisodeObjects(response)
+        if (episodes.isNotEmpty()) {
+            val matches = if (episode == null) {
+                episodes.take(1)
+            } else {
+                episodes.filter { getReflectInt(it, "episode") == episode }
+                    .ifEmpty { episodes.filter { getReflectString(it, "name")?.contains(Regex("""\b0*${episode}\b""")) == true } }
+            }
+            return matches.mapNotNull { getReflectString(it, "data") }.distinct()
+        }
+
+        return listOfNotNull(
+            getReflectString(response, "dataUrl"),
+            getReflectString(response, "url")
+        ).distinct()
+    }
+
+    private fun extractEpisodeObjects(response: LoadResponse): List<Any> {
+        val rawEpisodes = getReflectValue(response, "episodes") ?: return emptyList()
+        return when (rawEpisodes) {
+            is Map<*, *> -> rawEpisodes.values.flatMap { value ->
+                when (value) {
+                    is Iterable<*> -> value.filterNotNull()
+                    else -> listOfNotNull(value)
+                }
+            }
+            is Iterable<*> -> rawEpisodes.filterNotNull()
+            else -> emptyList()
+        }
+    }
+
+    private fun getReflectValue(target: Any, name: String): Any? {
+        return runCatching {
+            val field = target.javaClass.getDeclaredField(name)
+            field.isAccessible = true
+            field.get(target)
+        }.getOrNull() ?: runCatching {
+            target.javaClass.methods.firstOrNull { method ->
+                method.parameterTypes.isEmpty() &&
+                    method.name.equals("get${name.replaceFirstChar { it.uppercase() }}", true)
+            }?.invoke(target)
+        }.getOrNull()
+    }
+
+    private fun getReflectString(target: Any, name: String): String? {
+        return getReflectValue(target, name)?.toString()?.takeIf { it.isNotBlank() && it != "null" }
+    }
+
+    private fun getReflectInt(target: Any, name: String): Int? {
+        return when (val value = getReflectValue(target, name)) {
+            is Int -> value
+            is Number -> value.toInt()
+            is String -> value.toIntOrNull()
+            else -> null
+        }
+    }
+
+    private fun normalizeProviderName(value: String): String {
+        return value.lowercase().replace(Regex("""[^a-z0-9]+"""), "")
     }
 
     private data class AniWaveAjaxResponse(

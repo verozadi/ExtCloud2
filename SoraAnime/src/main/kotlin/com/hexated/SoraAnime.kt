@@ -7,6 +7,7 @@ import com.hexated.SoraExtractor.invokeAnimeTosho
 import com.hexated.SoraExtractor.invokeAniWave
 import com.hexated.SoraExtractor.invokeGogoAnime
 import com.hexated.SoraExtractor.invokeHiAnime
+import com.hexated.SoraExtractor.invokeInstalledAnimeProviders
 import com.hexated.SoraExtractor.invokeKimCartoon
 import com.hexated.SoraExtractor.invokeKisskh
 import com.hexated.SoraExtractor.invokeIdlix
@@ -160,6 +161,7 @@ open class SoraAnime(val sharedPref: SharedPreferences? = null) : TmdbProvider()
             SourceDescriptor("gogoanime", SourceGroup.CORE, 20, timeoutMs = 15_000L),
             SourceDescriptor("animepahe", SourceGroup.CORE, 25, timeoutMs = 15_000L),
             SourceDescriptor("aniwave", SourceGroup.CORE, 26, timeoutMs = 15_000L),
+            SourceDescriptor("installedanime", SourceGroup.FALLBACK, 190, timeoutMs = 30_000L),
             SourceDescriptor("kimcartoon", SourceGroup.FALLBACK, 242, timeoutMs = 15_000L),
             SourceDescriptor("animetosho", SourceGroup.FALLBACK, 245, timeoutMs = 15_000L),
             SourceDescriptor("vidlink", SourceGroup.CORE, 30),
@@ -546,6 +548,13 @@ open class SoraAnime(val sharedPref: SharedPreferences? = null) : TmdbProvider()
                 callback
             )
             "animetosho" -> invokeAnimeTosho(
+                res.titleCandidates(),
+                res.season,
+                res.episode,
+                subtitleCallback,
+                callback
+            )
+            "installedanime" -> invokeInstalledAnimeProviders(
                 res.titleCandidates(),
                 res.season,
                 res.episode,
