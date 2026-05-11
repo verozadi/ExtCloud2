@@ -1087,10 +1087,10 @@
     },
     {
         "iconUrl": "https://github.com/duro92/ExtCloud/blob/main/SoraAnime/Icon.png",
-        "fileHash": "sha256-debd505783d2e854b7d539b538ff46c4084c72dc9594db0acf00450924e553c0",
+        "fileHash": "sha256-19ede9452c393662efff88d810f2ee9af4b7162e8921634673857884e1fc4eb7",
         "apiVersion": 1,
         "repositoryUrl": "https://github.com/Pendztagram/ex",
-        "fileSize": 308619,
+        "fileSize": 314870,
         "status": 1,
         "language": "en",
         "authors": [
