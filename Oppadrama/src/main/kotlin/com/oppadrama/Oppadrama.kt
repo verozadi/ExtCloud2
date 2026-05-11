@@ -28,6 +28,10 @@ class Oppadrama : MainAPI() {
 
     companion object {
         var context: android.content.Context? = null
+        private val requestHeaders = mapOf(
+            "Accept" to "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+            "User-Agent" to USER_AGENT,
+        )
         
         fun getStatus(t: String): ShowStatus {
             return when (t) {
@@ -52,7 +56,7 @@ class Oppadrama : MainAPI() {
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
         val url = "$mainUrl/${request.data}".plus("&page=$page").withVerifyHuman()
-        val document = app.get(url).document
+        val document = app.get(url, referer = "$mainUrl/", headers = requestHeaders).document
         val items = document.select("div.listupd article.bs, article.bs")
                             .mapNotNull { it.toSearchResult() }
         return newHomePageResponse(HomePageList(request.name, items), hasNext = items.isNotEmpty())
@@ -80,7 +84,7 @@ class Oppadrama : MainAPI() {
 }
 
     override suspend fun search(query: String): List<SearchResponse> {
-    val document = app.get("$mainUrl/?s=$query".withVerifyHuman(), timeout = 50L).document
+    val document = app.get("$mainUrl/?s=$query".withVerifyHuman(), referer = "$mainUrl/", headers = requestHeaders, timeout = 50L).document
     val results = document.select("div.listupd article.bs, article.bs")
         .mapNotNull { it.toSearchResult() }
     return results
@@ -95,7 +99,7 @@ class Oppadrama : MainAPI() {
     }
 }
     override suspend fun load(url: String): LoadResponse {
-    val document = app.get(url.withVerifyHuman()).document
+    val document = app.get(url.withVerifyHuman(), referer = "$mainUrl/", headers = requestHeaders).document
 
     
     val title = document.selectFirst("h1.entry-title")?.text()?.trim().orEmpty()
@@ -200,7 +204,7 @@ val episodes = episodeElements
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ): Boolean {
-        val document = app.get(data.withVerifyHuman()).document
+        val document = app.get(data.withVerifyHuman(), referer = "$mainUrl/", headers = requestHeaders).document
 
         document.selectFirst("div.player-embed iframe")
             ?.getIframeAttr()
