@@ -3,8 +3,11 @@ package com.hexated
 import android.content.SharedPreferences
 import com.fasterxml.jackson.annotation.JsonProperty
 import com.hexated.SoraExtractor.invokeAnimePahe
+import com.hexated.SoraExtractor.invokeAnimeTosho
+import com.hexated.SoraExtractor.invokeAniWave
 import com.hexated.SoraExtractor.invokeGogoAnime
 import com.hexated.SoraExtractor.invokeHiAnime
+import com.hexated.SoraExtractor.invokeKimCartoon
 import com.hexated.SoraExtractor.invokeKisskh
 import com.hexated.SoraExtractor.invokeIdlix
 import com.hexated.SoraExtractor.invokeYflix
@@ -131,6 +134,9 @@ open class SoraAnime(val sharedPref: SharedPreferences? = null) : TmdbProvider()
         const val hiAnimeAPI = "https://hianime.dk"
         const val gogoAnimeAPI = "https://gogoanimes.cv"
         const val animePaheAPI = "https://animepahe.ch"
+        const val kimCartoonAPI = "https://kimcartoon.com.co"
+        const val aniWaveAPI = "https://aniwaves.ru"
+        const val animeToshoAPI = "https://animetosho.org"
 
         enum class SourceGroup {
             CORE,
@@ -153,6 +159,9 @@ open class SoraAnime(val sharedPref: SharedPreferences? = null) : TmdbProvider()
             SourceDescriptor("hianime", SourceGroup.CORE, 10, timeoutMs = 15_000L),
             SourceDescriptor("gogoanime", SourceGroup.CORE, 20, timeoutMs = 15_000L),
             SourceDescriptor("animepahe", SourceGroup.CORE, 25, timeoutMs = 15_000L),
+            SourceDescriptor("aniwave", SourceGroup.CORE, 26, timeoutMs = 15_000L),
+            SourceDescriptor("kimcartoon", SourceGroup.FALLBACK, 242, timeoutMs = 15_000L),
+            SourceDescriptor("animetosho", SourceGroup.FALLBACK, 245, timeoutMs = 15_000L),
             SourceDescriptor("vidlink", SourceGroup.CORE, 30),
             SourceDescriptor("vidfast", SourceGroup.CORE, 40),
             SourceDescriptor("videasy", SourceGroup.CORE, 45),
@@ -516,6 +525,27 @@ open class SoraAnime(val sharedPref: SharedPreferences? = null) : TmdbProvider()
                 callback
             )
             "animepahe" -> invokeAnimePahe(
+                res.titleCandidates(),
+                res.season,
+                res.episode,
+                subtitleCallback,
+                callback
+            )
+            "aniwave" -> invokeAniWave(
+                res.titleCandidates(),
+                res.season,
+                res.episode,
+                subtitleCallback,
+                callback
+            )
+            "kimcartoon" -> invokeKimCartoon(
+                res.titleCandidates(),
+                res.season,
+                res.episode,
+                subtitleCallback,
+                callback
+            )
+            "animetosho" -> invokeAnimeTosho(
                 res.titleCandidates(),
                 res.season,
                 res.episode,

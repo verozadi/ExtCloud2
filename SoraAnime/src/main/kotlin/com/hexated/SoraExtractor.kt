@@ -1008,7 +1008,126 @@ object SoraExtractor : SoraAnime() {
         }
     }
 
+    suspend fun invokeAniWave(
+        titleCandidates: List<String>,
+        season: Int?,
+        episode: Int?,
+        subtitleCallback: (SubtitleFile) -> Unit,
+        callback: (ExtractorLink) -> Unit,
+    ) {
+        val match = findAniWaveTitle(titleCandidates) ?: return
+        val animeId = match.url.substringAfterLast("-").toIntOrNull() ?: return
+        val episodeId = findAniWaveEpisodeId(animeId, episode ?: 1) ?: return
+        val serverHtml = app.get(
+            "$aniWaveAPI/ajax/server/list?servers=$episodeId",
+            referer = match.url,
+            headers = animeAjaxHeaders(aniWaveAPI)
+        ).parsedSafe<AniWaveAjaxResponse>()?.result ?: return
+
+        Jsoup.parse(serverHtml).select("[data-link-id]").mapNotNull { it.attr("data-link-id") }
+            .distinct()
+            .forEach { linkId ->
+                val sourceUrl = app.get(
+                    "$aniWaveAPI/ajax/sources?id=${linkId.urlEncodeCompat()}",
+                    referer = match.url,
+                    headers = animeAjaxHeaders(aniWaveAPI)
+                ).parsedSafe<AniWaveSourceResponse>()?.result?.url
+                    ?: return@forEach
+                loadAnimeEmbed("AniWave", sourceUrl, match.url, aniWaveAPI, subtitleCallback, callback)
+            }
+    }
+
+    suspend fun invokeKimCartoon(
+        titleCandidates: List<String>,
+        season: Int?,
+        episode: Int?,
+        subtitleCallback: (SubtitleFile) -> Unit,
+        callback: (ExtractorLink) -> Unit,
+    ) {
+        val match = findWordPressAnimeTitle(
+            kimCartoonAPI,
+            titleCandidates,
+            "a.series[href*='/cartoon/']",
+            "title",
+            allowSeasonSuffix = true,
+        ) ?: return
+        val document = app.get(match.url, headers = animeBrowserHeaders(kimCartoonAPI)).document
+        val ep = episode ?: 1
+        val episodeUrl = document.select("a[href]")
+            .firstOrNull { link ->
+                val href = link.absUrl("href")
+                href.contains("-episode-$ep/", true) ||
+                    link.selectFirst(".epl-num, .epcur")?.text()?.trim()?.equals(ep.toString(), true) == true
+            }?.absUrl("href") ?: return
+
+        val urls = collectKimCartoonEmbedUrls(episodeUrl)
+        urls.forEach { url ->
+            loadAnimeEmbed("KimCartoon", url, episodeUrl, kimCartoonAPI, subtitleCallback, callback)
+        }
+    }
+
+    suspend fun invokeAnimeTosho(
+        titleCandidates: List<String>,
+        season: Int?,
+        episode: Int?,
+        subtitleCallback: (SubtitleFile) -> Unit,
+        callback: (ExtractorLink) -> Unit,
+    ) {
+        val title = titleCandidates.firstOrNull() ?: return
+        val query = buildString {
+            append(title)
+            episode?.let { append(" $it") }
+        }
+        val document = app.get(
+            "$animeToshoAPI/search?q=${query.urlEncodeCompat()}",
+            referer = "$animeToshoAPI/",
+            headers = animeBrowserHeaders(animeToshoAPI)
+        ).document
+
+        document.select(".home_list_entry").take(4).forEach { entry ->
+            val entryTitle = entry.selectFirst(".link a")?.text() ?: return@forEach
+            if (!animeToshoTitleMatches(entryTitle, titleCandidates, episode)) return@forEach
+            entry.select("a.dllink[href]").forEach { link ->
+                val label = link.text().trim()
+                if (label.equals("Torrent", true) || label.equals("NZB", true)) return@forEach
+                val url = link.absUrl("href")
+                if (url.isBlank()) return@forEach
+                loadExtractor(url, "$animeToshoAPI/", subtitleCallback) { callback(it) }
+            }
+        }
+    }
+
     private data class AnimeTitleMatch(val title: String, val url: String)
+
+    private suspend fun findAniWaveTitle(titleCandidates: List<String>): AnimeTitleMatch? {
+        titleCandidates.forEach { query ->
+            val document = app.get(
+                "$aniWaveAPI/filter?keyword=${query.urlEncodeCompat()}",
+                referer = "$aniWaveAPI/home",
+                headers = animeBrowserHeaders(aniWaveAPI)
+            ).document
+            document.select("a.d-title[href*='/watch/']").forEach { link ->
+                val title = link.text().trim()
+                val jpTitle = link.attr("data-jp").trim()
+                if (animeTitleMatches(title, titleCandidates) || animeTitleMatches(jpTitle, titleCandidates)) {
+                    return AnimeTitleMatch(title, fixUrl(link.attr("href"), aniWaveAPI))
+                }
+            }
+        }
+        return null
+    }
+
+    private suspend fun findAniWaveEpisodeId(animeId: Int, episode: Int): String? {
+        val html = app.get(
+            "$aniWaveAPI/ajax/episode/list/$animeId",
+            referer = "$aniWaveAPI/",
+            headers = animeAjaxHeaders(aniWaveAPI)
+        ).parsedSafe<AniWaveAjaxResponse>()?.result ?: return null
+        return Jsoup.parse(html).select("a[data-ids][data-num]")
+            .firstOrNull { it.attr("data-num").toDoubleOrNull()?.toInt() == episode }
+            ?.attr("data-ids")
+            ?.takeIf { it.isNotBlank() }
+    }
 
     private suspend fun findHiAnimeTitle(titleCandidates: List<String>): AnimeTitleMatch? {
         titleCandidates.forEach { query ->
@@ -1033,6 +1152,7 @@ object SoraExtractor : SoraAnime() {
         titleCandidates: List<String>,
         selector: String,
         titleAttribute: String,
+        allowSeasonSuffix: Boolean = false,
     ): AnimeTitleMatch? {
         titleCandidates.forEach { query ->
             val document = app.get(
@@ -1042,7 +1162,9 @@ object SoraExtractor : SoraAnime() {
             ).document
             document.select(selector).forEach { link ->
                 val title = link.attr(titleAttribute).ifBlank { link.text() }.trim()
-                if (animeTitleMatches(title, titleCandidates)) {
+                if (animeTitleMatches(title, titleCandidates) ||
+                    (allowSeasonSuffix && animeTitleMatches(stripSeasonSuffix(title), titleCandidates))
+                ) {
                     return AnimeTitleMatch(title, link.absUrl("href").ifBlank { fixUrl(link.attr("href"), baseUrl) })
                 }
             }
@@ -1076,6 +1198,17 @@ object SoraExtractor : SoraAnime() {
                     .ifBlank { fixUrl(iframe.attr("src").ifBlank { iframe.attr("data-src") }, baseUrl) }
                     .takeIf { it.isNotBlank() }?.let { add(it) }
             }
+        }.distinct()
+    }
+
+    private suspend fun collectKimCartoonEmbedUrls(episodeUrl: String): List<String> {
+        val document = app.get(episodeUrl, referer = "$kimCartoonAPI/", headers = animeBrowserHeaders(kimCartoonAPI)).document
+        return buildList {
+            document.select("[data-embed]").forEach { element ->
+                element.absUrl("data-embed").ifBlank { fixUrl(element.attr("data-embed"), kimCartoonAPI) }
+                    .takeIf { it.isNotBlank() }?.let { add(it) }
+            }
+            collectWordPressEmbedUrls(episodeUrl, kimCartoonAPI).forEach { add(it) }
         }.distinct()
     }
 
@@ -1133,6 +1266,26 @@ object SoraExtractor : SoraAnime() {
             .trim()
     }
 
+    private fun stripSeasonSuffix(title: String): String {
+        return title
+            .replace(Regex("""\bseason\s+\d+\b.*$""", RegexOption.IGNORE_CASE), "")
+            .trim()
+    }
+
+    private fun animeToshoTitleMatches(
+        entryTitle: String,
+        candidates: List<String>,
+        episode: Int?,
+    ): Boolean {
+        val normalizedEntry = normalizeAnimeTitle(entryTitle)
+        val titleMatches = candidates.any { normalizedEntry.contains(normalizeAnimeTitle(it)) }
+        if (!titleMatches) return false
+        val ep = episode ?: return true
+        val padded = ep.toString().padStart(2, '0')
+        return Regex("""(?i)(?:s\d+e0*$ep\b|\b0*$ep\b|-\s*0*$ep\b|episode\s+0*$ep\b)""")
+            .containsMatchIn(entryTitle) || normalizedEntry.contains("e$padded")
+    }
+
     private fun animeBrowserHeaders(origin: String): Map<String, String> {
         return mapOf(
             "Accept" to "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
@@ -1141,6 +1294,27 @@ object SoraExtractor : SoraAnime() {
             "User-Agent" to USER_AGENT,
         )
     }
+
+    private fun animeAjaxHeaders(origin: String): Map<String, String> {
+        return animeBrowserHeaders(origin) + mapOf(
+            "Accept" to "application/json, text/javascript, */*; q=0.01",
+            "X-Requested-With" to "XMLHttpRequest",
+        )
+    }
+
+    private data class AniWaveAjaxResponse(
+        val status: Int? = null,
+        val result: String? = null,
+    )
+
+    private data class AniWaveSourceResponse(
+        val status: Int? = null,
+        val result: AniWaveSourceResult? = null,
+    )
+
+    private data class AniWaveSourceResult(
+        val url: String? = null,
+    )
 
     suspend fun invokeMapple(
         tmdbId: Int?,
