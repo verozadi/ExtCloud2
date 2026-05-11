@@ -20,7 +20,7 @@ import org.jsoup.Jsoup
 
 
 class Oppadrama : MainAPI() {
-    override var mainUrl = "http://45.11.57.125"
+    override var mainUrl = "http://45.11.57.199"
     override var name = "Oppadrama🧦"
     override val hasMainPage = true
     override var lang = "id"
@@ -51,9 +51,9 @@ class Oppadrama : MainAPI() {
     )
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
-        val url = "$mainUrl/${request.data}".plus("&page=$page")
+        val url = "$mainUrl/${request.data}".plus("&page=$page").withVerifyHuman()
         val document = app.get(url).document
-        val items = document.select("div.listupd article.bs")
+        val items = document.select("div.listupd article.bs, article.bs")
                             .mapNotNull { it.toSearchResult() }
         return newHomePageResponse(HomePageList(request.name, items), hasNext = items.isNotEmpty())
     }
@@ -80,8 +80,8 @@ class Oppadrama : MainAPI() {
 }
 
     override suspend fun search(query: String): List<SearchResponse> {
-    val document = app.get("$mainUrl/?s=$query", timeout = 50L).document
-    val results = document.select("div.listupd article.bs")
+    val document = app.get("$mainUrl/?s=$query".withVerifyHuman(), timeout = 50L).document
+    val results = document.select("div.listupd article.bs, article.bs")
         .mapNotNull { it.toSearchResult() }
     return results
 }
@@ -95,7 +95,7 @@ class Oppadrama : MainAPI() {
     }
 }
     override suspend fun load(url: String): LoadResponse {
-    val document = app.get(url).document
+    val document = app.get(url.withVerifyHuman()).document
 
     
     val title = document.selectFirst("h1.entry-title")?.text()?.trim().orEmpty()
@@ -200,7 +200,7 @@ val episodes = episodeElements
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ): Boolean {
-        val document = app.get(data).document
+        val document = app.get(data.withVerifyHuman()).document
 
         document.selectFirst("div.player-embed iframe")
             ?.getIframeAttr()
@@ -259,5 +259,11 @@ val episodes = episodeElements
         if (this == null) return null
         val regex = Regex("(-\\d*x\\d*)").find(this)?.groupValues?.get(0) ?: return this
         return this.replace(regex, "")
+    }
+
+    private fun String.withVerifyHuman(): String {
+        if (contains("verify_human=", true)) return this
+        val separator = if (contains("?")) "&" else "?"
+        return "$this${separator}verify_human=1"
     }
 }
