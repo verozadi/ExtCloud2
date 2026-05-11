@@ -360,9 +360,19 @@ open class SoraAnime(val sharedPref: SharedPreferences? = null) : TmdbProvider()
 
         return if (type == TvType.TvSeries) {
             val lastSeason = res.last_episode_to_air?.season_number
-            val episodes = res.seasons?.mapNotNull { season ->
-                app.get("$apiBase/${data.type}/${data.id}/season/${season.seasonNumber}?api_key=$apiKey")
-                    .parsedSafe<MediaDetailEpisodes>()?.episodes?.map { eps ->
+            var absoluteEpisode = 0
+            val episodes = res.seasons
+                ?.sortedBy { it.seasonNumber ?: 0 }
+                ?.mapNotNull { season ->
+                    app.get("$apiBase/${data.type}/${data.id}/season/${season.seasonNumber}?api_key=$apiKey")
+                        .parsedSafe<MediaDetailEpisodes>()?.episodes
+                        ?.sortedBy { it.episodeNumber ?: 0 }
+                        ?.map { eps ->
+                            val currentAbsoluteEpisode = if ((eps.seasonNumber ?: 0) > 0 && (eps.episodeNumber ?: 0) > 0) {
+                                ++absoluteEpisode
+                            } else {
+                                null
+                            }
                         newEpisode(
                             data = LinkData(
                                 data.id,
@@ -371,6 +381,7 @@ open class SoraAnime(val sharedPref: SharedPreferences? = null) : TmdbProvider()
                                 data.type,
                                 eps.seasonNumber,
                                 eps.episodeNumber,
+                                absoluteEpisode = currentAbsoluteEpisode,
                                 aniId = animeIds?.id?.toString(),
                                 animeId = animeIds?.id?.toString(),
                                 malId = animeIds?.idMal,
@@ -400,8 +411,8 @@ open class SoraAnime(val sharedPref: SharedPreferences? = null) : TmdbProvider()
                         }.apply {
                             this.addDate(eps.airDate)
                         }
-                    }
-            }?.flatten() ?: listOf()
+                        }
+                }?.flatten() ?: listOf()
             newTvSeriesLoadResponse(
                 title,
                 url,
@@ -515,49 +526,49 @@ open class SoraAnime(val sharedPref: SharedPreferences? = null) : TmdbProvider()
                 res.malId,
                 res.titleCandidates(),
                 res.season,
-                res.episode,
+                res.animeEpisode(),
                 subtitleCallback,
                 callback
             )
             "gogoanime" -> invokeGogoAnime(
                 res.titleCandidates(),
                 res.season,
-                res.episode,
+                res.animeEpisode(),
                 subtitleCallback,
                 callback
             )
             "animepahe" -> invokeAnimePahe(
                 res.titleCandidates(),
                 res.season,
-                res.episode,
+                res.animeEpisode(),
                 subtitleCallback,
                 callback
             )
             "aniwave" -> invokeAniWave(
                 res.titleCandidates(),
                 res.season,
-                res.episode,
+                res.animeEpisode(),
                 subtitleCallback,
                 callback
             )
             "kimcartoon" -> invokeKimCartoon(
                 res.titleCandidates(),
                 res.season,
-                res.episode,
+                res.animeEpisode(),
                 subtitleCallback,
                 callback
             )
             "animetosho" -> invokeAnimeTosho(
                 res.titleCandidates(),
                 res.season,
-                res.episode,
+                res.animeEpisode(),
                 subtitleCallback,
                 callback
             )
             "installedanime" -> invokeInstalledAnimeProviders(
                 res.titleCandidates(),
                 res.season,
-                res.episode,
+                res.animeEpisode(),
                 subtitleCallback,
                 callback
             )
@@ -666,6 +677,10 @@ open class SoraAnime(val sharedPref: SharedPreferences? = null) : TmdbProvider()
             .distinct()
     }
 
+    private fun LinkData.animeEpisode(): Int? {
+        return absoluteEpisode ?: episode
+    }
+
     data class LinkData(
         val id: Int? = null,
         val imdbId: String? = null,
@@ -673,6 +688,7 @@ open class SoraAnime(val sharedPref: SharedPreferences? = null) : TmdbProvider()
         val type: String? = null,
         val season: Int? = null,
         val episode: Int? = null,
+        val absoluteEpisode: Int? = null,
         val aniId: String? = null,
         val animeId: String? = null,
         val malId: Int? = null,
