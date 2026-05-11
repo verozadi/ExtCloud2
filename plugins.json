@@ -912,10 +912,10 @@
     },
     {
         "iconUrl": "https://t2.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=http://45.11.57.243&size=%size%",
-        "fileHash": "sha256-4be315ed15db60c4cd0e3230a23120a8166a41b9cc40c2101114a5dff3e6dd03",
+        "fileHash": "sha256-e483fb4da830a6ab580d56acdeb93a7827bc229f7893704ae82ec20294ce8fee",
         "apiVersion": 1,
         "repositoryUrl": "https://github.com/Pendztagram/ex",
-        "fileSize": 20819,
+        "fileSize": 21087,
         "status": 1,
         "language": "id",
         "authors": [
