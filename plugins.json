@@ -1086,6 +1086,28 @@
         "name": "SontolFilmProvider"
     },
     {
+        "iconUrl": "https://github.com/duro92/ExtCloud/blob/main/SoraAnime/Icon.png",
+        "fileHash": "sha256-57bc01dafeb4da816a7e88e638620bb8269c80cca89987529a65836430755868",
+        "apiVersion": 1,
+        "repositoryUrl": "https://github.com/Pendztagram/ex",
+        "fileSize": 283465,
+        "status": 1,
+        "language": "en",
+        "authors": [
+            "Hexated",
+            "Sora"
+        ],
+        "tvTypes": [
+            "Anime",
+            "AnimeMovie"
+        ],
+        "version": 1,
+        "internalName": "SoraAnime",
+        "description": "Anime-only provider based on SoraStream sources",
+        "url": "https://raw.githubusercontent.com/Pendztagram/ex/builds/SoraAnime.cs3",
+        "name": "SoraAnime"
+    },
+    {
         "iconUrl": "https://github.com/duro92/ExtCloud/blob/main/SoraStream/Icon.png",
         "fileHash": "sha256-1a68090cb44ad9c019b1ba64b28d7b6d65f5bcf33ae92a502c5844e7e4c2dd85",
         "apiVersion": 1,
