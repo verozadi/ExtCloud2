@@ -2,6 +2,9 @@ package com.hexated
 
 import android.content.SharedPreferences
 import com.fasterxml.jackson.annotation.JsonProperty
+import com.hexated.SoraExtractor.invokeAnimePahe
+import com.hexated.SoraExtractor.invokeGogoAnime
+import com.hexated.SoraExtractor.invokeHiAnime
 import com.hexated.SoraExtractor.invokeKisskh
 import com.hexated.SoraExtractor.invokeIdlix
 import com.hexated.SoraExtractor.invokeYflix
@@ -125,6 +128,9 @@ open class SoraAnime(val sharedPref: SharedPreferences? = null) : TmdbProvider()
         const val vembedAPI = "https://vembed.stream"
         const val smashyStreamAPI = "https://embed.smashystream.com"
         const val riveStreamAPI = "https://www.rivestream.app"
+        const val hiAnimeAPI = "https://hianime.dk"
+        const val gogoAnimeAPI = "https://gogoanimes.cv"
+        const val animePaheAPI = "https://animepahe.ch"
 
         enum class SourceGroup {
             CORE,
@@ -144,13 +150,15 @@ open class SoraAnime(val sharedPref: SharedPreferences? = null) : TmdbProvider()
         )
 
         val sourceRegistry = listOf(
+            SourceDescriptor("hianime", SourceGroup.CORE, 10, timeoutMs = 15_000L),
+            SourceDescriptor("gogoanime", SourceGroup.CORE, 20, timeoutMs = 15_000L),
+            SourceDescriptor("animepahe", SourceGroup.CORE, 25, timeoutMs = 15_000L),
             SourceDescriptor("vidlink", SourceGroup.CORE, 30),
             SourceDescriptor("vidfast", SourceGroup.CORE, 40),
             SourceDescriptor("videasy", SourceGroup.CORE, 45),
             SourceDescriptor("vixsrc", SourceGroup.EMBED, 50),
             SourceDescriptor("vidzen", SourceGroup.EMBED, 55),
             SourceDescriptor("cinezo", SourceGroup.EMBED, 58),
-            SourceDescriptor("xprime", SourceGroup.EMBED, 59),
             SourceDescriptor("cinesrc", SourceGroup.EMBED, 60),
             SourceDescriptor("mapple", SourceGroup.EMBED, 62),
             SourceDescriptor("cinemaos", SourceGroup.EMBED, 64),
@@ -166,13 +174,6 @@ open class SoraAnime(val sharedPref: SharedPreferences? = null) : TmdbProvider()
             SourceDescriptor("smashystream", SourceGroup.EMBED, 160),
             SourceDescriptor("vembed", SourceGroup.EMBED, 170, tv = false),
             SourceDescriptor("yflix", SourceGroup.EMBED, 175),
-            SourceDescriptor("idlix", SourceGroup.FALLBACK, 200),
-            SourceDescriptor("azmovies", SourceGroup.FALLBACK, 210, tv = false),
-            SourceDescriptor("noxx", SourceGroup.FALLBACK, 220, movie = false),
-            SourceDescriptor("watch32", SourceGroup.FALLBACK, 230),
-            SourceDescriptor("uhdmovies", SourceGroup.FALLBACK, 235),
-            SourceDescriptor("multimovies", SourceGroup.FALLBACK, 238),
-            SourceDescriptor("kisskh", SourceGroup.FALLBACK, 240),
             SourceDescriptor("wyzie", SourceGroup.SUBTITLE, 260, subtitleOnly = true, timeoutMs = 10_000L),
             SourceDescriptor("watchsomuch", SourceGroup.SUBTITLE, 270, subtitleOnly = true, timeoutMs = 10_000L),
         ).sortedBy { it.priority }
@@ -319,6 +320,14 @@ open class SoraAnime(val sharedPref: SharedPreferences? = null) : TmdbProvider()
         val isCartoon = genres?.contains("Animation") ?: false
         val isAnime = isCartoon && (res.original_language == "zh" || res.original_language == "ja")
         if (!isAnime) return null
+        val animeIds = runCatching {
+            convertTmdbToAnimeId(
+                title,
+                releaseDate,
+                releaseDate,
+                if (type == TvType.Movie) TvType.AnimeMovie else TvType.Anime
+            )
+        }.getOrNull()
         val isAsian = !isAnime && (res.original_language == "zh" || res.original_language == "ko")
         val isBollywood = res.production_countries?.any { it.name == "India" } ?: false
 
@@ -351,6 +360,9 @@ open class SoraAnime(val sharedPref: SharedPreferences? = null) : TmdbProvider()
                                 data.type,
                                 eps.seasonNumber,
                                 eps.episodeNumber,
+                                aniId = animeIds?.id?.toString(),
+                                animeId = animeIds?.id?.toString(),
+                                malId = animeIds?.idMal,
                                 title = title,
                                 year = season.airDate?.split("-")?.first()?.toIntOrNull(),
                                 orgTitle = orgTitle,
@@ -413,6 +425,9 @@ open class SoraAnime(val sharedPref: SharedPreferences? = null) : TmdbProvider()
                     year = year,
                     orgTitle = orgTitle,
                     isAnime = isAnime,
+                    aniId = animeIds?.id?.toString(),
+                    animeId = animeIds?.id?.toString(),
+                    malId = animeIds?.idMal,
                     jpTitle = res.alternative_titles?.results?.find { it.iso_3166_1 == "JP" }?.title,
                     airedDate = res.releaseDate
                         ?: res.firstAirDate,
@@ -485,6 +500,28 @@ open class SoraAnime(val sharedPref: SharedPreferences? = null) : TmdbProvider()
         callback: (ExtractorLink) -> Unit,
     ) {
         when (source.key) {
+            "hianime" -> invokeHiAnime(
+                res.malId,
+                res.titleCandidates(),
+                res.season,
+                res.episode,
+                subtitleCallback,
+                callback
+            )
+            "gogoanime" -> invokeGogoAnime(
+                res.titleCandidates(),
+                res.season,
+                res.episode,
+                subtitleCallback,
+                callback
+            )
+            "animepahe" -> invokeAnimePahe(
+                res.titleCandidates(),
+                res.season,
+                res.episode,
+                subtitleCallback,
+                callback
+            )
             "vixsrc" -> invokeVixsrc(res.id, res.season, res.episode, callback)
             "vidlink" -> invokeVidlink(res.id, res.season, res.episode, callback)
             "vidfast" -> invokeVidfast(res.id, res.season, res.episode, subtitleCallback, callback)
@@ -584,7 +621,7 @@ open class SoraAnime(val sharedPref: SharedPreferences? = null) : TmdbProvider()
     }
 
     private fun LinkData.titleCandidates(): List<String> {
-        return listOfNotNull(title, orgTitle)
+        return listOfNotNull(title, jpTitle, orgTitle)
             .map { it.trim() }
             .filter { it.isNotBlank() }
             .distinct()
@@ -599,6 +636,7 @@ open class SoraAnime(val sharedPref: SharedPreferences? = null) : TmdbProvider()
         val episode: Int? = null,
         val aniId: String? = null,
         val animeId: String? = null,
+        val malId: Int? = null,
         val title: String? = null,
         val year: Int? = null,
         val orgTitle: String? = null,
