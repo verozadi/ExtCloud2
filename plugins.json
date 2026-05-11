@@ -912,10 +912,10 @@
     },
     {
         "iconUrl": "https://t2.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=http://45.11.57.243&size=%size%",
-        "fileHash": "sha256-e55fad13a453a17081e1f6d40f53ad37e421765f170d8e5f98ae568584bba24f",
+        "fileHash": "sha256-fac25493e77b89705ded1c9169342035144e0ff8c90bf0e2c6362aa420afb74c",
         "apiVersion": 1,
         "repositoryUrl": "https://github.com/Pendztagram/ex",
-        "fileSize": 21474,
+        "fileSize": 22074,
         "status": 1,
         "language": "id",
         "authors": [
@@ -926,7 +926,7 @@
             "TvSeries",
             "Movie"
         ],
-        "version": 12,
+        "version": 14,
         "internalName": "Oppadrama",
         "description": "Oppadrama",
         "url": "https://raw.githubusercontent.com/Pendztagram/ex/builds/Oppadrama.cs3",
