@@ -20,7 +20,7 @@ import org.jsoup.Jsoup
 
 
 class Oppadrama : MainAPI() {
-    override var mainUrl = "http://45.11.57.31"
+    override var mainUrl = "http://45.11.57.199"
     override var name = "Oppadrama🧦"
     override val hasMainPage = true
     override var lang = "id"
@@ -30,7 +30,9 @@ class Oppadrama : MainAPI() {
         var context: android.content.Context? = null
         private val requestHeaders = mapOf(
             "Accept" to "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
-            "User-Agent" to USER_AGENT,
+            "Accept-Language" to "id-ID,id;q=0.9,en-US;q=0.8,en;q=0.7",
+            "Cookie" to "user_is_human=true",
+            "User-Agent" to "Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Mobile Safari/537.36",
         )
         
         fun getStatus(t: String): ShowStatus {
@@ -55,7 +57,7 @@ class Oppadrama : MainAPI() {
     )
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
-        val url = "$mainUrl/${request.data}".plus("&page=$page").withVerifyHuman()
+        val url = "$mainUrl/${request.data}".plus("&page=$page")
         val document = app.get(url, referer = "$mainUrl/", headers = requestHeaders).document
         val items = document.select(searchResultSelector)
                             .mapNotNull { it.toSearchResult() }
@@ -87,7 +89,7 @@ class Oppadrama : MainAPI() {
 }
 
     override suspend fun search(query: String): List<SearchResponse> {
-    val document = app.get("$mainUrl/?s=$query".withVerifyHuman(), referer = "$mainUrl/", headers = requestHeaders, timeout = 50L).document
+    val document = app.get("$mainUrl/?s=$query", referer = "$mainUrl/", headers = requestHeaders, timeout = 50L).document
     val results = document.select(searchResultSelector)
         .mapNotNull { it.toSearchResult() }
         .distinctBy { it.url }
@@ -103,7 +105,7 @@ class Oppadrama : MainAPI() {
     }
 }
     override suspend fun load(url: String): LoadResponse {
-    val document = app.get(url.withVerifyHuman(), referer = "$mainUrl/", headers = requestHeaders).document
+    val document = app.get(url, referer = "$mainUrl/", headers = requestHeaders).document
 
     
     val title = document.selectFirst("h1.entry-title")?.text()?.trim().orEmpty()
@@ -208,7 +210,7 @@ val episodes = episodeElements
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ): Boolean {
-        val document = app.get(data.withVerifyHuman(), referer = "$mainUrl/", headers = requestHeaders).document
+        val document = app.get(data, referer = "$mainUrl/", headers = requestHeaders).document
 
         document.selectFirst("div.player-embed iframe")
             ?.getIframeAttr()
@@ -267,16 +269,6 @@ val episodes = episodeElements
         if (this == null) return null
         val regex = Regex("(-\\d*x\\d*)").find(this)?.groupValues?.get(0) ?: return this
         return this.replace(regex, "")
-    }
-
-    private fun String.withVerifyHuman(): String {
-        if (contains("verify_human=", true)) return this
-        val separator = when {
-            endsWith("?") || endsWith("&") -> ""
-            contains("?") -> "&"
-            else -> "?"
-        }
-        return "$this${separator}verify_human=1"
     }
 
     private val searchResultSelector = "div.listupd article.bs, article.bs, div.bsx > a[href], div.bsx a[href]"
