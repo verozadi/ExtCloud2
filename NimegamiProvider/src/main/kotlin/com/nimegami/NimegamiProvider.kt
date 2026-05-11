@@ -141,29 +141,32 @@ class NimegamiProvider : MainAPI() {
             source.url.orEmpty().forEach { rawUrl ->
                 val streamPage = normalizeUrl(rawUrl, mainUrl) ?: return@forEach
                 val label = source.format?.ifBlank { null } ?: "Nimegami"
-                handled = true
                 runCatching {
                     loadExtractor(streamPage, "$mainUrl/", subtitleCallback) { link ->
-                        runBlocking {
-                            callback(
-                                newExtractorLink(
-                                    source = link.source,
-                                    name = "$name $label",
-                                    url = link.url,
-                                    type = link.type
-                                ) {
-                                    referer = link.referer
-                                    quality = qualityFromName(label)
-                                    headers = link.headers + mapOf("Range" to "bytes=0-")
-                                    extractorData = link.extractorData
-                                }
-                            )
+                        if (emitted.add(link.url)) {
+                            handled = true
+                            runBlocking {
+                                callback(
+                                    newExtractorLink(
+                                        source = link.source,
+                                        name = "$name $label",
+                                        url = link.url,
+                                        type = link.type
+                                    ) {
+                                        referer = link.referer
+                                        quality = qualityFromName(label)
+                                        headers = link.headers + mapOf("Range" to "bytes=0-")
+                                        extractorData = link.extractorData
+                                    }
+                                )
+                            }
                         }
                     }
                 }
 
                 val direct = extractStreamUrl(streamPage)
                 if (direct != null && emitted.add(direct)) {
+                    handled = true
                     callback(
                         newExtractorLink(
                             source = name,
@@ -181,16 +184,27 @@ class NimegamiProvider : MainAPI() {
                         }
                     )
                 } else {
-                    runCatching { loadExtractor(streamPage, mainUrl, subtitleCallback, callback) }
+                    runCatching {
+                        loadExtractor(streamPage, mainUrl, subtitleCallback) { link ->
+                            if (emitted.add(link.url)) {
+                                handled = true
+                                callback(link)
+                            }
+                        }
+                    }
                 }
             }
         }
 
         if (sources.isEmpty() && data.startsWith("http", true)) {
             documentDownloadLinks(data).forEach { link ->
-                if (emitted.add(link)) {
-                    handled = true
-                    runCatching { loadExtractor(link, data, subtitleCallback, callback) }
+                runCatching {
+                    loadExtractor(link, data, subtitleCallback) { extractorLink ->
+                        if (emitted.add(extractorLink.url)) {
+                            handled = true
+                            callback(extractorLink)
+                        }
+                    }
                 }
             }
         }
@@ -215,16 +229,30 @@ class NimegamiProvider : MainAPI() {
                 Regex(""""$key"\s*:\s*"([^"]+)"""").find(html)
                     ?.groupValues
                     ?.getOrNull(1)
-                    ?.jsonUrlDecode()
+                    ?.streamUrlDecode()
                     ?.takeIf { it.isNotBlank() }
             }
         if (preloadUrl != null) return preloadUrl
+
+        val inlineUrl = listOf(
+            Regex("""INITIAL_STREAM_URL\s*=\s*["']([^"']+)["']"""),
+            Regex("""<source[^>]+src=["']([^"']+)["']""", RegexOption.IGNORE_CASE),
+            Regex("""<video[^>]+src=["']([^"']+)["']""", RegexOption.IGNORE_CASE),
+        ).firstNotNullOfOrNull { regex ->
+            regex.find(html)
+                ?.groupValues
+                ?.getOrNull(1)
+                ?.streamUrlDecode()
+                ?.let { normalizeUrl(it, streamPage) }
+                ?.takeIf { it.isNotBlank() }
+        }
+        if (inlineUrl != null) return inlineUrl
 
         val streamApi = Regex("""STREAM_URL_API\s*=\s*["']([^"']+)["']""")
             .find(html)
             ?.groupValues
             ?.getOrNull(1)
-            ?.jsonUrlDecode()
+            ?.streamUrlDecode()
             ?.let { normalizeUrl(it, streamPage) }
             ?: return null
 
@@ -244,7 +272,7 @@ class NimegamiProvider : MainAPI() {
                 .find(apiResponse.text)
                 ?.groupValues
                 ?.getOrNull(1)
-                ?.jsonUrlDecode())
+                ?.streamUrlDecode())
             ?.takeIf { it.isNotBlank() }
     }
 
@@ -409,6 +437,14 @@ class NimegamiProvider : MainAPI() {
             .replace("\\u003d", "=")
             .replace("\\u003f", "?")
             .replace("\\u002F", "/")
+    }
+
+    private fun String.streamUrlDecode(): String {
+        return jsonUrlDecode()
+            .replace("&amp;", "&")
+            .replace("&#038;", "&")
+            .replace("&quot;", "\"")
+            .replace("&#34;", "\"")
     }
 
     data class StreamSource(
