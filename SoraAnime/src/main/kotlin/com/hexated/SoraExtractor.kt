@@ -23,6 +23,41 @@ import java.net.URLEncoder
 
 object SoraExtractor : SoraAnime() {
 
+    private const val idlixAPI = "https://z1.idlixku.com"
+    private const val yflixAPI = "https://yflix.to"
+    private const val azmoviesAPI = "https://azmovies.to"
+    private const val noxxAPI = "https://noxx.to"
+    private const val vidsrcccAPI = "https://vidsrc.cc"
+    private const val vidSrcAPI = "https://vidsrc.net"
+    private const val vidsrcMeAPI = "https://vidsrcme.ru"
+    private const val watchSomuchAPI = "https://watchsomuch.tv"
+    private const val vidlinkAPI = "https://vidlink.pro"
+    private const val vidfastAPI = "https://vidfast.pro"
+    private const val videasyAPI = "https://player.videasy.net"
+    private const val vidzenAPI = "https://vidzen.fun"
+    private const val cinezoAPI = "https://player.cinezo.live"
+    private const val xprimeAPI = "https://backend.xprime.tv"
+    private const val mappleAPI = "https://mapple.uk"
+    private const val cinemaosAPI = "https://cinemaos.tech"
+    private const val waveAPI = "https://wavembed.lol"
+    private const val uhdmoviesAPI = "https://uhdmovies.pink"
+    private const val multimoviesAPI = "https://multimovies.fyi"
+    private const val wyzieAPI = "https://sub.wyzie.ru"
+    private const val vixsrcAPI = "https://vixsrc.to"
+    private const val cinesrcAPI = "https://cinesrc.st"
+    private const val mafiaEmbedAPI = "https://embed.streammafia.to"
+    private const val autoEmbedAPI = "https://watch-v2.autoembed.app"
+    private const val twoEmbedAPI = "https://www.2embedstream.xyz"
+    private const val vidsrcMovAPI = "https://vidsrc.mov"
+    private const val multiEmbedAPI = "https://multiembed.mov"
+    private const val nineTvAPI = "https://moviesapi.club"
+    private const val ridomoviesAPI = "https://ridomovies.tv"
+    private const val soapyAPI = "https://soapy.to"
+    private const val watch32API = "https://watch32.sx"
+    private const val vembedAPI = "https://vembed.stream"
+    private const val smashyStreamAPI = "https://embed.smashystream.com"
+    private const val riveStreamAPI = "https://www.rivestream.app"
+
     suspend fun invokeIdlix(
         title: String? = null,
         year: Int? = null,

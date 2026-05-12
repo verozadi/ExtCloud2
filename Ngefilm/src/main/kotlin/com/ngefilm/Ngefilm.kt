@@ -20,7 +20,7 @@ class Ngefilm : MainAPI() {
     companion object {
         var context: android.content.Context? = null
     }
-    override var mainUrl = "https://new31.ngefilm.site"
+    override var mainUrl = "https://new34.ngefilm.site"
     private var directUrl: String? = null
     override var name = "Ngefilm😎"
     override val hasMainPage = true

@@ -12,14 +12,16 @@ import com.lagradost.cloudstream3.utils.ExtractorLink
 import com.lagradost.cloudstream3.utils.httpsify
 import com.lagradost.cloudstream3.utils.loadExtractor
 import java.net.URI
+import java.net.URLEncoder
+import org.jsoup.Jsoup
+import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 
 open class DutaMovie : MainAPI() {
     companion object {
         var context: android.content.Context? = null
     }
-    override var mainUrl = "https://pioneerdir.com"
-    private var directUrl: String? = null
+    override var mainUrl = "https://simplycufflinks.com"
     override var name = "DutaMovie🎉"
     override val hasMainPage = true
     override var lang = "id"
@@ -37,30 +39,52 @@ open class DutaMovie : MainAPI() {
             )
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
-        val data = request.data.format(page)
-        val document = app.get("$mainUrl/$data").document
-        val home = document.select("article.item").mapNotNull { it.toSearchResult() }
-        return newHomePageResponse(request.name, home)
+        val document = app.get(pageUrl(request.data, page), referer = "$mainUrl/").document
+        val home = document.toSearchResults()
+        val hasNext =
+                document
+                        .select(
+                                "link[rel=next], a.next.page-numbers, a.page-numbers[href*='/page/${page + 1}/']"
+                        )
+                        .isNotEmpty()
+        return newHomePageResponse(request.name, home, hasNext = hasNext)
     }
 
     private fun Element.toSearchResult(): SearchResponse? {
-        val title = this.selectFirst("h2.entry-title > a")?.text()?.trim() ?: return null
-        val href = fixUrl(this.selectFirst("a")!!.attr("href"))
-        val ratingText = this.selectFirst("div.gmr-rating-item")?.ownText()?.trim()
-        val posterUrl = fixUrlNull(this.selectFirst("a > img")?.getImageAttr()).fixImageQuality()
+        val anchor =
+                selectFirst("h2.entry-title a[href], .content-thumbnail a[href], a[href][itemprop=url]")
+                        ?: return null
+        val title =
+                listOf(
+                                selectFirst("h2.entry-title a[href]")?.text(),
+                                anchor.attr("title")
+                                        .substringAfter("Permalink ke:", anchor.attr("title"))
+                                        .substringAfter("Permalink to:", anchor.attr("title")),
+                                selectFirst("img[title]")?.attr("title"),
+                                selectFirst("img[alt]")?.attr("alt"),
+                                anchor.text(),
+                        )
+                        .firstOrNull { !it.isNullOrBlank() }
+                        ?.cleanTitle()
+                        ?: return null
+        val href = normalizeUrl(anchor.attr("href"), mainUrl) ?: return null
+        if (!href.contains(URI(mainUrl).host, true)) return null
+        val ratingText = this.selectFirst("div.gmr-rating-item")?.text()?.trim()
+        val posterUrl =
+                fixUrlNull(this.selectFirst(".content-thumbnail img, a[href] img, img")?.getImageAttr())
+                        .fixImageQuality()
         val quality =
                 this.select("div.gmr-qual, div.gmr-quality-item > a").text().trim().replace("-", "")
-        return if (quality.isEmpty()) {
-            val episode =
-                    Regex("Episode\\s?([0-9]+)")
-                            .find(title)
-                            ?.groupValues
-                            ?.getOrNull(1)
-                            ?.toIntOrNull()
-                            ?: this.select("div.gmr-numbeps > span").text().toIntOrNull()
-            newAnimeSearchResponse(title, href, TvType.TvSeries) {
+        val isSeries =
+                href.contains("/tv/", true) ||
+                        href.contains("/eps/", true) ||
+                        selectFirst("div.gmr-numbeps > span, .gmr-posttype-item") != null ||
+                        text().contains("TV Show", true) ||
+                        Regex("""\bS\d+\s*E""", RegexOption.IGNORE_CASE).containsMatchIn(text())
+        return if (isSeries) {
+            newTvSeriesSearchResponse(title, href, TvType.TvSeries) {
                 this.posterUrl = posterUrl
-                addSub(episode)
+                if (quality.isNotBlank()) addQuality(quality)
                 this.score = Score.from10(ratingText?.toDoubleOrNull())
             }
         } else {
@@ -73,10 +97,15 @@ open class DutaMovie : MainAPI() {
     }
 
     override suspend fun search(query: String): List<SearchResponse> {
+        val encoded = URLEncoder.encode(query.trim(), "UTF-8")
         val document =
-                app.get("${mainUrl}?s=$query&post_type[]=post&post_type[]=tv", timeout = 50L)
+                app.get(
+                                "${mainUrl}/?s=$encoded&post_type[]=post&post_type[]=tv",
+                                referer = "$mainUrl/",
+                                timeout = 50L,
+                        )
                         .document
-        val results = document.select("article.item").mapNotNull { it.toSearchResult() }
+        val results = document.toSearchResults()
         return results
     }
 
@@ -260,12 +289,13 @@ open class DutaMovie : MainAPI() {
                 ?.let { httpsify(it) }
                 ?: return@amap
 
-            loadExtractor(iframe, "$directUrl/", subtitleCallback, callback)
+            loadExtractor(iframe, "$mainUrl/", subtitleCallback, callback)
         }
     } else {
         document.select("div.tab-content-ajax").amap { ele ->
             val server = app.post(
-                "$directUrl/wp-admin/admin-ajax.php",
+                "$mainUrl/wp-admin/admin-ajax.php",
+                referer = data,
                 data = mapOf(
                     "action" to "muvipro_player_content",
                     "tab" to ele.attr("id"),
@@ -276,7 +306,7 @@ open class DutaMovie : MainAPI() {
                 .attr("src")
                 .let { httpsify(it) }
 
-            loadExtractor(server, "$directUrl/", subtitleCallback, callback)
+            loadExtractor(server, "$mainUrl/", subtitleCallback, callback)
         }
     }
 
@@ -290,6 +320,55 @@ document.select("ul.gmr-download-list li a").forEach { linkEl ->
     return true
 }
 
+
+    private fun Document.toSearchResults(): List<SearchResponse> {
+        return select(
+                        "article.item, article.item-infinite, div.gmr-item-modulepost, div.gmr-module-posts > div[class*=col-]"
+                )
+                .mapNotNull { it.toSearchResult() }
+                .distinctBy { it.url }
+    }
+
+    private fun pageUrl(pattern: String, page: Int): String {
+        val path =
+                if (page <= 1) {
+                    pattern.replace("/page/%d/", "/").replace("page/%d/", "")
+                } else {
+                    pattern.format(page)
+                }
+        return normalizeUrl(path, mainUrl) ?: "$mainUrl/"
+    }
+
+    private fun normalizeUrl(raw: String, baseUrl: String): String? {
+        val clean =
+                Jsoup.parse(raw)
+                        .text()
+                        .trim()
+                        .replace("&amp;", "&")
+                        .takeIf {
+                            it.isNotBlank() &&
+                                    !it.startsWith("javascript:", true) &&
+                                    !it.startsWith("data:", true)
+                        }
+                        ?: return null
+
+        return when {
+            clean.startsWith("//") -> "https:$clean"
+            clean.startsWith("http://", true) || clean.startsWith("https://", true) -> clean
+            else -> runCatching { URI(baseUrl).resolve(clean).toString() }.getOrNull()
+        }
+    }
+
+    private fun String.cleanTitle(): String {
+        return Jsoup.parse(this)
+                .text()
+                .replace(Regex("""(?i)^Permalink\s+(?:ke|to):\s*"""), "")
+                .replace(Regex("""(?i)^Nonton\s+(?:Film|Movie|Series|Serial|Drama)\s+"""), "")
+                .replace(Regex("""(?i)\s+terbaru\s+di\s+Dutamovie21.*$"""), "")
+                .replace(Regex("""(?i)\s+(?:Sub\s*Indo|Subtitle\s*Indonesia)\b.*$"""), "")
+                .replace(Regex("""\s+"""), " ")
+                .trim()
+    }
 
 
     private fun Element.getImageAttr(): String {

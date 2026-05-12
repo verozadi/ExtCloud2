@@ -10,36 +10,6 @@ import com.hexated.SoraExtractor.invokeHiAnime
 import com.hexated.SoraExtractor.invokeInstalledAnimeProviders
 import com.hexated.SoraExtractor.invokeKimCartoon
 import com.hexated.SoraExtractor.invokeKisskh
-import com.hexated.SoraExtractor.invokeIdlix
-import com.hexated.SoraExtractor.invokeYflix
-import com.hexated.SoraExtractor.invokeVidfast
-import com.hexated.SoraExtractor.invokeVidlink
-import com.hexated.SoraExtractor.invokeVixsrc
-import com.hexated.SoraExtractor.invokeVideasy
-import com.hexated.SoraExtractor.invokeVidzen
-import com.hexated.SoraExtractor.invokeCinezo
-import com.hexated.SoraExtractor.invokeXprime
-import com.hexated.SoraExtractor.invokeMapple
-import com.hexated.SoraExtractor.invokeCinemaos
-import com.hexated.SoraExtractor.invokeWave
-import com.hexated.SoraExtractor.invokeUhdmovies
-import com.hexated.SoraExtractor.invokeMultimovies
-import com.hexated.SoraExtractor.invokeWatchsomuch
-import com.hexated.SoraExtractor.invokeWyzie
-import com.hexated.SoraExtractor.invokeCineSrc
-import com.hexated.SoraExtractor.invokeMafiaEmbed
-import com.hexated.SoraExtractor.invokeAutoEmbed
-import com.hexated.SoraExtractor.invoke2Embed
-import com.hexated.SoraExtractor.invokeMultiEmbed
-import com.hexated.SoraExtractor.invokeNinetv
-import com.hexated.SoraExtractor.invokeRidomovies
-import com.hexated.SoraExtractor.invokeSoapy
-import com.hexated.SoraExtractor.invokeVembed
-import com.hexated.SoraExtractor.invokeAzmovies
-import com.hexated.SoraExtractor.invokeNoxx
-import com.hexated.SoraExtractor.invokeWatch32
-import com.hexated.SoraExtractor.invokeSmashyStream
-import com.hexated.SoraExtractor.invokeRiveStream
 import com.lagradost.cloudstream3.*
 import com.lagradost.cloudstream3.LoadResponse.Companion.addTrailer
 import com.lagradost.cloudstream3.metaproviders.TmdbProvider
@@ -98,40 +68,6 @@ open class SoraAnime(val sharedPref: SharedPreferences? = null) : TmdbProvider()
         private const val sourceConcurrency = 8
 
         /** ALL SOURCES */
-        const val idlixAPI = "https://z1.idlixku.com"
-        const val yflixAPI = "https://yflix.to"
-        const val azmoviesAPI = "https://azmovies.to"
-        const val noxxAPI = "https://noxx.to"
-        const val vidsrcccAPI = "https://vidsrc.cc"
-        const val vidSrcAPI = "https://vidsrc.net"
-        const val vidsrcMeAPI = "https://vidsrcme.ru"
-        const val watchSomuchAPI = "https://watchsomuch.tv"
-        const val vidlinkAPI = "https://vidlink.pro"
-        const val vidfastAPI = "https://vidfast.pro"
-        const val videasyAPI = "https://player.videasy.net"
-        const val vidzenAPI = "https://vidzen.fun"
-        const val cinezoAPI = "https://player.cinezo.live"
-        const val xprimeAPI = "https://backend.xprime.tv"
-        const val mappleAPI = "https://mapple.uk"
-        const val cinemaosAPI = "https://cinemaos.tech"
-        const val waveAPI = "https://wavembed.lol"
-        const val uhdmoviesAPI = "https://uhdmovies.pink"
-        const val multimoviesAPI = "https://multimovies.fyi"
-        const val wyzieAPI = "https://sub.wyzie.ru"
-        const val vixsrcAPI = "https://vixsrc.to"
-        const val cinesrcAPI = "https://cinesrc.st"
-        const val mafiaEmbedAPI = "https://embed.streammafia.to"
-        const val autoEmbedAPI = "https://watch-v2.autoembed.app"
-        const val twoEmbedAPI = "https://www.2embedstream.xyz"
-        const val vidsrcMovAPI = "https://vidsrc.mov"
-        const val multiEmbedAPI = "https://multiembed.mov"
-        const val nineTvAPI = "https://moviesapi.club"
-        const val ridomoviesAPI = "https://ridomovies.tv"
-        const val soapyAPI = "https://soapy.to"
-        const val watch32API = "https://watch32.sx"
-        const val vembedAPI = "https://vembed.stream"
-        const val smashyStreamAPI = "https://embed.smashystream.com"
-        const val riveStreamAPI = "https://www.rivestream.app"
         const val hiAnimeAPI = "https://hianime.dk"
         const val gogoAnimeAPI = "https://gogoanimes.cv"
         const val animePaheAPI = "https://animepahe.ch"
@@ -164,29 +100,6 @@ open class SoraAnime(val sharedPref: SharedPreferences? = null) : TmdbProvider()
             SourceDescriptor("installedanime", SourceGroup.FALLBACK, 190, timeoutMs = 30_000L),
             SourceDescriptor("kimcartoon", SourceGroup.FALLBACK, 242, timeoutMs = 15_000L),
             SourceDescriptor("animetosho", SourceGroup.FALLBACK, 245, timeoutMs = 15_000L),
-            SourceDescriptor("vidlink", SourceGroup.CORE, 30),
-            SourceDescriptor("vidfast", SourceGroup.CORE, 40),
-            SourceDescriptor("videasy", SourceGroup.CORE, 45),
-            SourceDescriptor("vixsrc", SourceGroup.EMBED, 50),
-            SourceDescriptor("vidzen", SourceGroup.EMBED, 55),
-            SourceDescriptor("cinezo", SourceGroup.EMBED, 58),
-            SourceDescriptor("cinesrc", SourceGroup.EMBED, 60),
-            SourceDescriptor("mapple", SourceGroup.EMBED, 62),
-            SourceDescriptor("cinemaos", SourceGroup.EMBED, 64),
-            SourceDescriptor("mafiaembed", SourceGroup.EMBED, 70),
-            SourceDescriptor("autoembed", SourceGroup.EMBED, 80),
-            SourceDescriptor("2embed", SourceGroup.EMBED, 90),
-            SourceDescriptor("wave", SourceGroup.EMBED, 100),
-            SourceDescriptor("multiembed", SourceGroup.EMBED, 110),
-            SourceDescriptor("ninetv", SourceGroup.EMBED, 120),
-            SourceDescriptor("ridomovies", SourceGroup.EMBED, 130),
-            SourceDescriptor("soapy", SourceGroup.EMBED, 140),
-            SourceDescriptor("rivestream", SourceGroup.EMBED, 150),
-            SourceDescriptor("smashystream", SourceGroup.EMBED, 160),
-            SourceDescriptor("vembed", SourceGroup.EMBED, 170, tv = false),
-            SourceDescriptor("yflix", SourceGroup.EMBED, 175),
-            SourceDescriptor("wyzie", SourceGroup.SUBTITLE, 260, subtitleOnly = true, timeoutMs = 10_000L),
-            SourceDescriptor("watchsomuch", SourceGroup.SUBTITLE, 270, subtitleOnly = true, timeoutMs = 10_000L),
         ).sortedBy { it.priority }
 
         suspend fun getApiBase(): String {
@@ -233,7 +146,6 @@ open class SoraAnime(val sharedPref: SharedPreferences? = null) : TmdbProvider()
 
     override val mainPage = mainPageOf(
         "/discover/tv?api_key=$apiKey&with_keywords=210024|222243&with_original_language=ja&sort_by=popularity.desc" to "Popular Anime",
-        "/discover/tv?api_key=$apiKey&with_keywords=210024|222243&with_original_language=ja&sort_by=first_air_date.desc" to "Latest Anime",
         "/discover/tv?api_key=$apiKey&with_keywords=210024|222243&with_original_language=ja&air_date.lte=${getDate().today}&air_date.gte=${getDate().today}&sort_by=popularity.desc" to "Airing Today",
         "/discover/tv?api_key=$apiKey&with_keywords=210024|222243&with_original_language=ja&air_date.lte=${getDate().nextWeek}&air_date.gte=${getDate().today}&sort_by=popularity.desc" to "On The Air",
         "/discover/movie?api_key=$apiKey&with_keywords=210024|222243&with_original_language=ja&sort_by=popularity.desc" to "Anime Movies",
@@ -572,96 +484,10 @@ open class SoraAnime(val sharedPref: SharedPreferences? = null) : TmdbProvider()
                 subtitleCallback,
                 callback
             )
-            "vixsrc" -> invokeVixsrc(res.id, res.season, res.episode, callback)
-            "vidlink" -> invokeVidlink(res.id, res.season, res.episode, callback)
-            "vidfast" -> invokeVidfast(res.id, res.season, res.episode, subtitleCallback, callback)
-            "videasy" -> invokeVideasy(res.id, res.season, res.episode, callback)
-            "vidzen" -> invokeVidzen(res.id, res.season, res.episode, callback)
-            "cinezo" -> invokeCinezo(res.id, res.season, res.episode, callback)
-            "xprime" -> invokeXprime(res.id, res.imdbId, res.title, res.year, res.season, res.episode, subtitleCallback, callback)
-            "mapple" -> invokeMapple(res.id, res.season, res.episode, callback)
-            "cinemaos" -> invokeCinemaos(res.id, res.season, res.episode, callback)
-            "cinesrc" -> invokeCineSrc(res.id, res.season, res.episode, callback)
-            "mafiaembed" -> invokeMafiaEmbed(res.id, res.season, res.episode, callback)
-            "autoembed" -> invokeAutoEmbed(res.id, res.season, res.episode, subtitleCallback, callback)
-            "2embed" -> invoke2Embed(res.id, res.season, res.episode, callback)
-            "wave" -> invokeWave(res.id, res.season, res.episode, callback)
-            "multiembed" -> invokeMultiEmbed(
-                res.id,
-                res.imdbId,
-                res.season,
-                res.episode,
-                subtitleCallback,
-                callback
-            )
-            "ninetv" -> invokeNinetv(res.id, res.season, res.episode, subtitleCallback, callback)
-            "ridomovies" -> invokeRidomovies(res.id, res.imdbId, res.season, res.episode, subtitleCallback, callback)
-            "soapy" -> invokeSoapy(res.id, res.season, res.episode, subtitleCallback, callback)
-            "rivestream" -> invokeRiveStream(res.id, res.season, res.episode, callback)
-            "smashystream" -> invokeSmashyStream(res.imdbId, res.season, res.episode, callback)
-            "vembed" -> invokeVembed(res.id, res.imdbId, res.season, callback)
-            "wyzie" -> invokeWyzie(res.id, res.season, res.episode, subtitleCallback)
-            "watchsomuch" -> invokeWatchsomuch(res.imdbId, res.season, res.episode, subtitleCallback)
-            "idlix" -> invokeIdlix(
-                res.title,
-                res.year,
-                res.season,
-                res.episode,
-                subtitleCallback,
-                callback
-            )
-
-            "azmovies" -> invokeAzmovies(
-                res.titleCandidates(),
-                res.year,
-                subtitleCallback,
-                callback
-            )
-
-            "noxx" -> invokeNoxx(
-                res.titleCandidates(),
-                res.season,
-                res.episode,
-                subtitleCallback,
-                callback
-            )
-            "watch32" -> invokeWatch32(
-                res.titleCandidates(),
-                res.season,
-                res.episode,
-                subtitleCallback,
-                callback
-            )
-
-            "uhdmovies" -> invokeUhdmovies(
-                res.titleCandidates(),
-                res.year,
-                res.season,
-                res.episode,
-                callback
-            )
-
-            "multimovies" -> invokeMultimovies(
-                res.titleCandidates(),
-                res.year,
-                res.season,
-                res.episode,
-                subtitleCallback,
-                callback
-            )
 
             "kisskh" -> invokeKisskh(
                 res.titleCandidates(),
                 res.year,
-                res.season,
-                res.episode,
-                subtitleCallback,
-                callback
-            )
-
-            "yflix" -> invokeYflix(
-                res.id,
-                res.imdbId,
                 res.season,
                 res.episode,
                 subtitleCallback,

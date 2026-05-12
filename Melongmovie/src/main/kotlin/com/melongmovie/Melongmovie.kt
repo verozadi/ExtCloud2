@@ -20,7 +20,7 @@ class Melongmovie : MainAPI() {
     companion object {
         var context: android.content.Context? = null
     }
-    override var mainUrl = "https://tv11.melongmovies.com"
+    override var mainUrl = "https://tv12.melongmovies.com"
     private var directUrl: String? = null
     override var name = "Melongmovie🪁"
     override val hasMainPage = true

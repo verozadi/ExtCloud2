@@ -20,7 +20,7 @@ import org.jsoup.Jsoup
 
 
 class Layarasia : MainAPI() {
-    override var mainUrl = "https://layarasia.lol"
+    override var mainUrl = "https://server-1.layar.asia"
     override var name = "Layarasia🐬"
     override val hasMainPage = true
     override var lang = "id"
