@@ -461,7 +461,10 @@ document.select("ul.gmr-download-list li a").forEach { linkEl ->
         return when {
             clean.startsWith("//") -> "https:$clean"
             clean.startsWith("http://", true) || clean.startsWith("https://", true) -> clean
-            else -> runCatching { URI(baseUrl).resolve(clean).toString() }.getOrNull()
+            else -> {
+                val base = if (baseUrl.endsWith("/")) baseUrl else "$baseUrl/"
+                runCatching { URI(base).resolve(clean).toString() }.getOrNull()
+            }
         }
     }
 
