@@ -36,7 +36,7 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import java.util.Calendar
 
 class SoraAnime : MainAPI() {
-    override var name = "SoraAnime"
+    override var name = "SoraAnime🐇"
     override var mainUrl = "https://anilist.co/search/anime"
     override var lang = "id"
     override val hasMainPage = true
