@@ -1,389 +1,144 @@
 package com.hexated
 
-import android.content.SharedPreferences
 import com.fasterxml.jackson.annotation.JsonProperty
-import com.hexated.SoraExtractor.invokeAnimePahe
-import com.hexated.SoraExtractor.invokeAnimeTosho
-import com.hexated.SoraExtractor.invokeAniWave
-import com.hexated.SoraExtractor.invokeGogoAnime
-import com.hexated.SoraExtractor.invokeHiAnime
-import com.hexated.SoraExtractor.invokeInstalledAnimeProviders
-import com.hexated.SoraExtractor.invokeKimCartoon
-import com.hexated.SoraExtractor.invokeKisskh
 import com.lagradost.cloudstream3.*
-import com.lagradost.cloudstream3.LoadResponse.Companion.addTrailer
-import com.lagradost.cloudstream3.metaproviders.TmdbProvider
-import com.lagradost.cloudstream3.LoadResponse.Companion.addImdbId
-import com.lagradost.cloudstream3.LoadResponse.Companion.addTMDbId
+import com.lagradost.cloudstream3.APIHolder
+import com.lagradost.cloudstream3.DubStatus
+import com.lagradost.cloudstream3.ErrorLoadingException
+import com.lagradost.cloudstream3.HomePageResponse
+import com.lagradost.cloudstream3.LoadResponse
+import com.lagradost.cloudstream3.MainAPI
+import com.lagradost.cloudstream3.MainPageRequest
+import com.lagradost.cloudstream3.SearchResponse
+import com.lagradost.cloudstream3.ShowStatus
+import com.lagradost.cloudstream3.SubtitleFile
+import com.lagradost.cloudstream3.TvType
+import com.lagradost.cloudstream3.app
+import com.lagradost.cloudstream3.mainPageOf
 import com.lagradost.cloudstream3.mvvm.logError
-import com.lagradost.cloudstream3.network.CloudflareKiller
+import com.lagradost.cloudstream3.newAnimeLoadResponse
+import com.lagradost.cloudstream3.newAnimeSearchResponse
+import com.lagradost.cloudstream3.newEpisode
+import com.lagradost.cloudstream3.newHomePageResponse
+import com.lagradost.cloudstream3.newMovieLoadResponse
 import com.lagradost.cloudstream3.utils.AppUtils.parseJson
 import com.lagradost.cloudstream3.utils.AppUtils.toJson
 import com.lagradost.cloudstream3.utils.ExtractorLink
+import com.lagradost.nicehttp.RequestBodyTypes
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
-import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.supervisorScope
-import kotlinx.coroutines.TimeoutCancellationException
-import kotlinx.coroutines.withTimeout
-import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.Semaphore
-import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.sync.withPermit
-import kotlin.math.roundToInt
+import okhttp3.MediaType.Companion.toMediaTypeOrNull
+import okhttp3.RequestBody.Companion.toRequestBody
+import java.util.Calendar
 
-
-open class SoraAnime(val sharedPref: SharedPreferences? = null) : TmdbProvider() {
+class SoraAnime : MainAPI() {
     override var name = "SoraAnime"
+    override var mainUrl = "https://anilist.co/search/anime"
+    override var lang = "id"
     override val hasMainPage = true
-    override val instantLinkLoading = true
-    override val useMetaLoadResponse = true
-    override val hasChromecastSupport = true
     override val hasQuickSearch = true
-    override val supportedTypes = setOf(
-        TvType.Anime,
-        TvType.AnimeMovie,
-    )
-
-    val token: String? = sharedPref?.getString("token", null)
-    val langCode = sharedPref?.getString("tmdb_language_code", "en-US")
-
-    val wpRedisInterceptor by lazy { CloudflareKiller() }
-
-    /** AUTHOR : Hexated & Sora */
-    companion object {
-        /** TOOLS */
-        var context: android.content.Context? = null
-
-        private const val OFFICIAL_TMDB_URL = "https://api.themoviedb.org/3"
-        private var currentBaseUrl: String? = null
-        private val apiMutex = Mutex()
-
-        const val gdbot = "https://gdtot.pro"
-        const val anilistAPI = "https://graphql.anilist.co"
-        const val malsyncAPI = "https://api.malsync.moe"
-        const val jikanAPI = "https://api.jikan.moe/v4"
-
-        const val apiKey = "b030404650f279792a8d3287232358e3"
-        private const val sourceConcurrency = 8
-
-        /** ALL SOURCES */
-        const val hiAnimeAPI = "https://hianime.dk"
-        const val gogoAnimeAPI = "https://gogoanimes.cv"
-        const val animePaheAPI = "https://animepahe.ch"
-        const val kimCartoonAPI = "https://kimcartoon.com.co"
-        const val aniWaveAPI = "https://aniwaves.ru"
-        const val animeToshoAPI = "https://animetosho.org"
-
-        enum class SourceGroup {
-            CORE,
-            EMBED,
-            SUBTITLE,
-            FALLBACK,
-        }
-
-        data class SourceDescriptor(
-            val key: String,
-            val group: SourceGroup,
-            val priority: Int,
-            val movie: Boolean = true,
-            val tv: Boolean = true,
-            val subtitleOnly: Boolean = false,
-            val timeoutMs: Long = 20_000L,
-        )
-
-        val sourceRegistry = listOf(
-            SourceDescriptor("hianime", SourceGroup.CORE, 10, timeoutMs = 15_000L),
-            SourceDescriptor("gogoanime", SourceGroup.CORE, 20, timeoutMs = 15_000L),
-            SourceDescriptor("animepahe", SourceGroup.CORE, 25, timeoutMs = 15_000L),
-            SourceDescriptor("aniwave", SourceGroup.CORE, 26, timeoutMs = 15_000L),
-            SourceDescriptor("installedanime", SourceGroup.FALLBACK, 190, timeoutMs = 30_000L),
-            SourceDescriptor("kimcartoon", SourceGroup.FALLBACK, 242, timeoutMs = 15_000L),
-            SourceDescriptor("animetosho", SourceGroup.FALLBACK, 245, timeoutMs = 15_000L),
-        ).sortedBy { it.priority }
-
-        suspend fun getApiBase(): String {
-            currentBaseUrl?.let { return it }
-
-            return apiMutex.withLock {
-                currentBaseUrl?.let { return it }
-                currentBaseUrl = if (checkConnectivity(OFFICIAL_TMDB_URL)) {
-                    OFFICIAL_TMDB_URL
-                } else {
-                    OFFICIAL_TMDB_URL
-                }
-                currentBaseUrl ?: OFFICIAL_TMDB_URL
-            }
-        }
-
-        private suspend fun checkConnectivity(url: String): Boolean {
-            return try {
-                val response = app.get(
-                    "$url/configuration?api_key=$apiKey",
-                    timeout = 10
-                )
-                response.code == 200 || response.code == 304
-            } catch (_: Exception) {
-                false
-            }
-        }
-
-        fun getType(t: String?): TvType {
-            return when (t) {
-                "movie" -> TvType.Movie
-                else -> TvType.TvSeries
-            }
-        }
-
-        fun getStatus(t: String?): ShowStatus {
-            return when (t) {
-                "Returning Series" -> ShowStatus.Ongoing
-                else -> ShowStatus.Completed
-            }
-        }
-
-    }
+    override val instantLinkLoading = true
+    override val hasDownloadSupport = true
+    override val supportedTypes = setOf(TvType.Anime, TvType.AnimeMovie, TvType.OVA)
 
     override val mainPage = mainPageOf(
-        "/discover/tv?api_key=$apiKey&with_keywords=210024|222243&with_original_language=ja&sort_by=popularity.desc" to "Popular Anime",
-        "/discover/tv?api_key=$apiKey&with_keywords=210024|222243&with_original_language=ja&air_date.lte=${getDate().today}&air_date.gte=${getDate().today}&sort_by=popularity.desc" to "Airing Today",
-        "/discover/tv?api_key=$apiKey&with_keywords=210024|222243&with_original_language=ja&air_date.lte=${getDate().nextWeek}&air_date.gte=${getDate().today}&sort_by=popularity.desc" to "On The Air",
-        "/discover/movie?api_key=$apiKey&with_keywords=210024|222243&with_original_language=ja&sort_by=popularity.desc" to "Anime Movies",
-        "/discover/tv?api_key=$apiKey&with_keywords=210024|222243&with_original_language=zh&sort_by=popularity.desc" to "Donghua",
+        "TRENDING_DESC" to "Trending Anime",
+        "POPULARITY_DESC" to "Popular Anime",
+        "SCORE_DESC" to "Top Rated Anime",
+        "CURRENT" to "Season Ini",
+        "NEXT" to "Season Berikutnya",
+        "MOVIE" to "Anime Movie",
     )
 
-    private fun getImageUrl(link: String?): String? {
-        if (link == null) return null
-        return if (link.startsWith("/")) "https://image.tmdb.org/t/p/w500/$link" else link
-    }
-
-    private fun getOriImageUrl(link: String?): String? {
-        if (link == null) return null
-        return if (link.startsWith("/")) "https://image.tmdb.org/t/p/original/$link" else link
-    }
-
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
-        val apiBase = getApiBase()
-        val adultQuery =
-            if (settingsForProvider.enableAdult) "" else "&without_keywords=190370|13059|226161|195669"
-        val type = if (request.data.contains("/movie")) "movie" else "tv"
-        val home = app.get("$apiBase${request.data}$adultQuery&page=$page")
-            .parsedSafe<Results>()?.results?.mapNotNull { media ->
-                media.toSearchResponse(type)
-            } ?: throw ErrorLoadingException("Invalid Json reponse")
-        return newHomePageResponse(request.name, home)
-    }
-
-    private fun Media.toSearchResponse(type: String? = null): SearchResponse? {
-        val mediaType = mediaType ?: type
-        return newAnimeSearchResponse(
-            title ?: name ?: originalTitle ?: return null,
-            Data(id = id, type = mediaType).toJson(),
-            if (mediaType == "movie") TvType.AnimeMovie else TvType.Anime,
-        ) {
-            this.posterUrl = getImageUrl(posterPath)
-            this.score= Score.from10(voteAverage)
-        }
-    }
-
-    override suspend fun quickSearch(query: String): List<SearchResponse>? = search(query)
-
-    override suspend fun search(query: String): List<SearchResponse>? {
-        val apiBase = getApiBase()
-        return app.get("$apiBase/search/multi?api_key=$apiKey&language=${langCode ?: "en-US"}&query=$query&page=1&include_adult=${settingsForProvider.enableAdult}")
-            .parsedSafe<Results>()?.results
-            ?.filter { media ->
-                media.mediaType == "movie" || media.mediaType == "tv" || media.mediaType == null
-            }
-            ?.filter { media ->
-                media.originalLanguage == "ja" || media.originalLanguage == "zh" ||
-                    media.title?.contains("anime", true) == true ||
-                    media.name?.contains("anime", true) == true
-            }
-            ?.mapNotNull { media -> media.toSearchResponse() }
-    }
-
-    override suspend fun load(url: String): LoadResponse? {
-    val data: Data? = try {
-        parseJson<Data>(url)
-    } catch (e: Exception) {
-        // fallback kalau ternyata string url (misalnya tmdb.org/...)
-        if (url.startsWith("http")) {
-            val id = url.substringAfterLast("/").toIntOrNull()
-            val type = if (url.contains("/movie/")) "movie" else "tv"
-            Data(id, type)
-        } else {
-            null
-        }
-    }
-
-    if (data == null || data.id == null) {
-        throw ErrorLoadingException("Invalid Data Format: $url")
-    }
-        val apiBase = getApiBase()
-        val type = getType(data.type)
-        val append = "alternative_titles,credits,external_ids,keywords,videos,recommendations"
-        val resUrl = if (type == TvType.Movie) {
-            "$apiBase/movie/${data.id}?api_key=$apiKey&append_to_response=$append"
-        } else {
-            "$apiBase/tv/${data.id}?api_key=$apiKey&append_to_response=$append"
-        }
-        val res = app.get(resUrl).parsedSafe<MediaDetail>()
-            ?: throw ErrorLoadingException("Invalid Json Response")
-
-        val title = res.title ?: res.name ?: return null
-        val poster = getOriImageUrl(res.posterPath)
-        val bgPoster = getOriImageUrl(res.backdropPath)
-        val orgTitle = res.originalTitle ?: res.originalName ?: return null
-        val releaseDate = res.releaseDate ?: res.firstAirDate
-        val year = releaseDate?.split("-")?.first()?.toIntOrNull()
-        val score = Score.from10(res.vote_average?.toString())
-        val genres = res.genres?.mapNotNull { it.name }
-
-        val isCartoon = genres?.contains("Animation") ?: false
-        val isAnime = isCartoon && (res.original_language == "zh" || res.original_language == "ja")
-        if (!isAnime) return null
-        val animeIds = runCatching {
-            convertTmdbToAnimeId(
-                title,
-                releaseDate,
-                releaseDate,
-                if (type == TvType.Movie) TvType.AnimeMovie else TvType.Anime
+        val season = currentAniSeason()
+        val variables = when (request.data) {
+            "CURRENT" -> mapOf(
+                "page" to page,
+                "season" to season.first,
+                "seasonYear" to season.second,
+                "sort" to listOf("POPULARITY_DESC")
             )
-        }.getOrNull()
-        val isAsian = !isAnime && (res.original_language == "zh" || res.original_language == "ko")
-        val isBollywood = res.production_countries?.any { it.name == "India" } ?: false
-
-        val keywords = res.keywords?.results?.mapNotNull { it.name }.orEmpty()
-            .ifEmpty { res.keywords?.keywords?.mapNotNull { it.name } }
-
-        val actors = res.credits?.cast?.mapNotNull { cast ->
-            ActorData(
-                Actor(
-                    cast.name ?: cast.originalName
-                    ?: return@mapNotNull null, getImageUrl(cast.profilePath)
-                ), roleString = cast.character
+            "NEXT" -> {
+                val next = nextAniSeason()
+                mapOf(
+                    "page" to page,
+                    "season" to next.first,
+                    "seasonYear" to next.second,
+                    "sort" to listOf("POPULARITY_DESC")
+                )
+            }
+            "MOVIE" -> mapOf(
+                "page" to page,
+                "format" to listOf("MOVIE"),
+                "sort" to listOf("POPULARITY_DESC", "SCORE_DESC")
             )
-        } ?: return null
-        val recommendations =
-            res.recommendations?.results?.mapNotNull { media -> media.toSearchResponse() }
+            else -> mapOf("page" to page, "sort" to listOf(request.data))
+        }
+        val response = anilistPage(variables)
+        return newHomePageResponse(
+            request.name,
+            response.data?.Page?.media.orEmpty().mapNotNull { it.toSearchResponse() },
+            response.data?.Page?.pageInfo?.hasNextPage == true
+        )
+    }
 
-        val trailer = res.videos?.results?.map { "https://www.youtube.com/watch?v=${it.key}" }
+    override suspend fun search(query: String): List<SearchResponse> {
+        return anilistPage(
+            mapOf(
+                "page" to 1,
+                "search" to query.trim(),
+                "sort" to listOf("SEARCH_MATCH", "POPULARITY_DESC")
+            )
+        ).data?.Page?.media.orEmpty().mapNotNull { it.toSearchResponse() }
+    }
 
-        return if (type == TvType.TvSeries) {
-            val lastSeason = res.last_episode_to_air?.season_number
-            var absoluteEpisode = 0
-            val episodes = res.seasons
-                ?.sortedBy { it.seasonNumber ?: 0 }
-                ?.mapNotNull { season ->
-                    app.get("$apiBase/${data.type}/${data.id}/season/${season.seasonNumber}?api_key=$apiKey")
-                        .parsedSafe<MediaDetailEpisodes>()?.episodes
-                        ?.sortedBy { it.episodeNumber ?: 0 }
-                        ?.map { eps ->
-                            val currentAbsoluteEpisode = if ((eps.seasonNumber ?: 0) > 0 && (eps.episodeNumber ?: 0) > 0) {
-                                ++absoluteEpisode
-                            } else {
-                                null
-                            }
-                        newEpisode(
-                            data = LinkData(
-                                data.id,
-                                res.external_ids?.imdb_id,
-                                res.external_ids?.tvdb_id,
-                                data.type,
-                                eps.seasonNumber,
-                                eps.episodeNumber,
-                                absoluteEpisode = currentAbsoluteEpisode,
-                                aniId = animeIds?.id?.toString(),
-                                animeId = animeIds?.id?.toString(),
-                                malId = animeIds?.idMal,
-                                title = title,
-                                year = season.airDate?.split("-")?.first()?.toIntOrNull(),
-                                orgTitle = orgTitle,
-                                isAnime = isAnime,
-                                airedYear = year,
-                                lastSeason = lastSeason,
-                                epsTitle = eps.name,
-                                jpTitle = res.alternative_titles?.results?.find { it.iso_3166_1 == "JP" }?.title,
-                                date = season.airDate,
-                                airedDate = res.releaseDate
-                                    ?: res.firstAirDate,
-                                isAsian = isAsian,
-                                isBollywood = isBollywood,
-                                isCartoon = isCartoon
-                            ).toJson()
-                        ) {
-                            this.name =
-                                eps.name + if (isUpcoming(eps.airDate)) " • [UPCOMING]" else ""
-                            this.season = eps.seasonNumber
-                            this.episode = eps.episodeNumber
-                            this.posterUrl = getImageUrl(eps.stillPath)
-                            this.score = Score.from10(eps.voteAverage)
-                            this.description = eps.overview
-                        }.apply {
-                            this.addDate(eps.airDate)
-                        }
-                        }
-                }?.flatten() ?: listOf()
-            newTvSeriesLoadResponse(
-                title,
-                url,
-                if (isAnime) TvType.Anime else TvType.TvSeries,
-                episodes
-            ) {
-                this.posterUrl = poster
-                this.backgroundPosterUrl = bgPoster
+    override suspend fun load(url: String): LoadResponse {
+        val initial = parseJson<LinkData>(url)
+        val media = anilistMedia(initial.id)
+        val data = media.toLinkData()
+        val type = media.type()
+        val title = media.bestTitle()
+        val poster = media.coverImage?.extraLarge ?: media.coverImage?.large
+        val year = media.startDate?.year
+        val description = media.description?.replace(Regex("<[^>]+>"), "")?.trim()
+        val tags = media.genres?.filterNotNull().orEmpty()
+        val status = when (media.status) {
+            "RELEASING" -> ShowStatus.Ongoing
+            "FINISHED" -> ShowStatus.Completed
+            else -> null
+        }
+
+        if (type == TvType.AnimeMovie) {
+            return newMovieLoadResponse(title, url, type, data.toJson()) {
+                posterUrl = poster
+                backgroundPosterUrl = media.bannerImage
                 this.year = year
-                this.plot = res.overview
-                this.tags = keywords.takeIf { !it.isNullOrEmpty() } ?: genres
-                this.score = score
-                this.showStatus = getStatus(res.status)
-                this.recommendations = recommendations
-                this.actors = actors
-                this.contentRating = fetchContentRating(data.id, "US")
-                addTrailer(trailer)
-                addTMDbId(data.id.toString())
-                addImdbId(res.external_ids?.imdb_id)
+                plot = description
+                this.tags = tags
             }
-        } else {
-            newMovieLoadResponse(
-                title,
-                url,
-                if (isAnime) TvType.AnimeMovie else TvType.Movie,
-                LinkData(
-                    data.id,
-                    res.external_ids?.imdb_id,
-                    res.external_ids?.tvdb_id,
-                    data.type,
-                    title = title,
-                    year = year,
-                    orgTitle = orgTitle,
-                    isAnime = isAnime,
-                    aniId = animeIds?.id?.toString(),
-                    animeId = animeIds?.id?.toString(),
-                    malId = animeIds?.idMal,
-                    jpTitle = res.alternative_titles?.results?.find { it.iso_3166_1 == "JP" }?.title,
-                    airedDate = res.releaseDate
-                        ?: res.firstAirDate,
-                    isAsian = isAsian,
-                    isBollywood = isBollywood
-                ).toJson(),
-            ) {
-                this.posterUrl = poster
-                this.backgroundPosterUrl = bgPoster
-                this.comingSoon = isUpcoming(releaseDate)
-                this.year = year
-                this.plot = res.overview
-                this.duration = res.runtime
-                this.tags = keywords.takeIf { !it.isNullOrEmpty() } ?: genres
-                this.score = score
-                this.recommendations = recommendations
-                this.actors = actors
-                this.contentRating = fetchContentRating(data.id, "US")
-                addTrailer(trailer)
-                addTMDbId(data.id.toString())
-                addImdbId(res.external_ids?.imdb_id)
+        }
+
+        val totalEpisodes = media.knownEpisodeCount()
+        val episodes = (1..totalEpisodes).map { ep ->
+            newEpisode(data.copy(episode = ep).toJson()) {
+                name = "Episode $ep"
+                episode = ep
             }
+        }
+
+        return newAnimeLoadResponse(title, url, type) {
+            posterUrl = poster
+            backgroundPosterUrl = media.bannerImage
+            this.year = year
+            plot = description
+            this.tags = tags
+            showStatus = status
+            addEpisodes(DubStatus.Subbed, episodes)
         }
     }
 
@@ -393,280 +148,367 @@ open class SoraAnime(val sharedPref: SharedPreferences? = null) : TmdbProvider()
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ): Boolean {
-        val res = parseJson<LinkData>(data)
-        val isMovie = res.season == null
-        val activeSources = sourceRegistry.filter { source ->
-            when {
-                isMovie && !source.movie -> false
-                !isMovie && !source.tv -> false
-                else -> true
-            }
-        }
-        val semaphore = Semaphore(sourceConcurrency)
+        val linkData = parseJson<LinkData>(data)
+        val titles = linkData.titleCandidates()
+        val episode = linkData.episode
+        val providers = installedAnimeProviders()
+        val semaphore = Semaphore(6)
 
         supervisorScope {
-            activeSources.map { source ->
+            providers.map { provider ->
                 async {
                     semaphore.withPermit {
-                        try {
-                            withTimeout(source.timeoutMs) {
-                                invokeSource(source, res, subtitleCallback, callback)
+                        runCatching {
+                            val result = provider.search(titles.firstOrNull().orEmpty()).orEmpty()
+                                .firstOrNull { it.type?.isAnimeType() == true && titleMatches(it.name, titles) }
+                                ?: return@runCatching
+                            val response = provider.load(result.url) ?: return@runCatching
+                            providerEpisodeData(response, episode).forEach { episodeData ->
+                                provider.loadLinks(episodeData, false, subtitleCallback, callback)
                             }
-                        } catch (e: TimeoutCancellationException) {
-                            logError(e)
-                        } catch (e: CancellationException) {
-                            throw e
-                        } catch (e: Exception) {
-                            logError(e)
+                        }.onFailure {
+                            if (it is CancellationException) throw it
+                            logError(it)
                         }
                     }
                 }
             }.awaitAll()
         }
-
         return true
     }
 
-    private suspend fun invokeSource(
-        source: SourceDescriptor,
-        res: LinkData,
-        subtitleCallback: (SubtitleFile) -> Unit,
-        callback: (ExtractorLink) -> Unit,
-    ) {
-        when (source.key) {
-            "hianime" -> invokeHiAnime(
-                res.malId,
-                res.titleCandidates(),
-                res.season,
-                res.animeEpisode(),
-                subtitleCallback,
-                callback
-            )
-            "gogoanime" -> invokeGogoAnime(
-                res.titleCandidates(),
-                res.season,
-                res.animeEpisode(),
-                subtitleCallback,
-                callback
-            )
-            "animepahe" -> invokeAnimePahe(
-                res.titleCandidates(),
-                res.season,
-                res.animeEpisode(),
-                subtitleCallback,
-                callback
-            )
-            "aniwave" -> invokeAniWave(
-                res.titleCandidates(),
-                res.season,
-                res.animeEpisode(),
-                subtitleCallback,
-                callback
-            )
-            "kimcartoon" -> invokeKimCartoon(
-                res.titleCandidates(),
-                res.season,
-                res.animeEpisode(),
-                subtitleCallback,
-                callback
-            )
-            "animetosho" -> invokeAnimeTosho(
-                res.titleCandidates(),
-                res.season,
-                res.animeEpisode(),
-                subtitleCallback,
-                callback
-            )
-            "installedanime" -> invokeInstalledAnimeProviders(
-                res.titleCandidates(),
-                res.season,
-                res.animeEpisode(),
-                subtitleCallback,
-                callback
-            )
+    private suspend fun anilistPage(variables: Map<String, Any?>): AnilistResponse {
+        val query = """
+            query (
+              ${'$'}page: Int,
+              ${'$'}search: String,
+              ${'$'}season: MediaSeason,
+              ${'$'}seasonYear: Int,
+              ${'$'}format: [MediaFormat],
+              ${'$'}sort: [MediaSort]
+            ) {
+              Page(page: ${'$'}page, perPage: 20) {
+                pageInfo { hasNextPage }
+                media(
+                  type: ANIME,
+                  search: ${'$'}search,
+                  season: ${'$'}season,
+                  seasonYear: ${'$'}seasonYear,
+                  format_in: ${'$'}format,
+                  sort: ${'$'}sort
+                ) {
+                  ${mediaFields()}
+                }
+              }
+            }
+        """.trimIndent()
+        return anilistPost(query, variables.filterValues { it != null })
+    }
 
-            "kisskh" -> invokeKisskh(
-                res.titleCandidates(),
-                res.year,
-                res.season,
-                res.episode,
-                subtitleCallback,
-                callback
-            )
+    private suspend fun anilistMedia(id: Int?): AnilistMedia {
+        val query = """
+            query (${'$'}id: Int) {
+              Media(id: ${'$'}id, type: ANIME) {
+                ${mediaFields()}
+              }
+            }
+        """.trimIndent()
+        return anilistPost(query, mapOf("id" to id)).data?.Media
+            ?: throw ErrorLoadingException("AniList media not found")
+    }
+
+    private suspend fun anilistPost(query: String, variables: Map<String, Any?>): AnilistResponse {
+        val body = mapOf("query" to query, "variables" to variables)
+            .toJson()
+            .toRequestBody(RequestBodyTypes.JSON.toMediaTypeOrNull())
+        return app.post(ANILIST_API, requestBody = body).parsed()
+    }
+
+    private fun mediaFields(): String {
+        return """
+            id
+            idMal
+            format
+            status
+            episodes
+            duration
+            season
+            seasonYear
+            description(asHtml: false)
+            bannerImage
+            genres
+            title { romaji english native }
+            coverImage { extraLarge large }
+            startDate { year month day }
+            nextAiringEpisode { episode }
+        """.trimIndent()
+    }
+
+    private fun AnilistMedia.toSearchResponse(): SearchResponse? {
+        val title = bestTitle().takeIf { it.isNotBlank() } ?: return null
+        return newAnimeSearchResponse(title, toLinkData().toJson(), type()) {
+            posterUrl = coverImage?.extraLarge ?: coverImage?.large
         }
     }
 
+    private fun AnilistMedia.toLinkData(): LinkData {
+        return LinkData(
+            id = id,
+            malId = idMal,
+            title = title?.romaji ?: title?.english,
+            englishTitle = title?.english,
+            nativeTitle = title?.native,
+            format = format,
+            episode = null
+        )
+    }
+
+    private fun AnilistMedia.bestTitle(): String {
+        return title?.english ?: title?.romaji ?: title?.native ?: "Anime"
+    }
+
+    private fun AnilistMedia.type(): TvType {
+        return when (format) {
+            "MOVIE" -> TvType.AnimeMovie
+            "OVA", "ONA", "SPECIAL" -> TvType.OVA
+            else -> TvType.Anime
+        }
+    }
+
+    private fun AnilistMedia.knownEpisodeCount(): Int {
+        val known = episodes ?: nextAiringEpisode?.episode?.minus(1)
+        return known?.coerceAtLeast(1) ?: 1
+    }
+
     private fun LinkData.titleCandidates(): List<String> {
-        return listOfNotNull(title, jpTitle, orgTitle)
+        return listOfNotNull(title, englishTitle, nativeTitle)
             .map { it.trim() }
             .filter { it.isNotBlank() }
             .distinct()
     }
 
-    private fun LinkData.animeEpisode(): Int? {
-        return absoluteEpisode ?: episode
+    private fun installedAnimeProviders(): List<MainAPI> {
+        val allowedNames = setOf(
+            "animasu",
+            "animesail",
+            "animexin",
+            "anixcafe",
+            "samehadaku",
+            "otakudesu",
+            "anoboy",
+            "kuramanime",
+            "kuronime",
+            "nekokun",
+            "nimegami",
+            "oploverz",
+            "anichin",
+            "auratail",
+            "gojodesu",
+            "hidoristream",
+            "nontonanimeid",
+            "zoronime",
+            "winbu",
+            "kazefuri",
+        )
+        val apiHolder = APIHolder::class.java
+        return listOf("apis", "allProviders", "allApis", "apiProviders")
+            .firstNotNullOfOrNull { fieldName ->
+                runCatching {
+                    val field = apiHolder.getDeclaredField(fieldName)
+                    field.isAccessible = true
+                    @Suppress("UNCHECKED_CAST")
+                    (field.get(APIHolder) as? List<MainAPI>)?.filter { api ->
+                        api.name != name &&
+                            api.supportedTypes.any { it.isAnimeType() } &&
+                            allowedNames.any { allowed -> normalizeProviderName(api.name).contains(allowed) }
+                    }
+                }.getOrNull()
+            }.orEmpty()
+    }
+
+    private fun providerEpisodeData(response: LoadResponse, episode: Int?): List<String> {
+        val episodes = reflectEpisodes(response)
+        if (episodes.isNotEmpty()) {
+            val selected = if (episode == null) {
+                episodes.take(1)
+            } else {
+                episodes.filter { getReflectInt(it, "episode") == episode }
+                    .ifEmpty {
+                        episodes.filter {
+                            getReflectString(it, "name")?.contains(Regex("""\b0*${episode}\b""")) == true
+                        }
+                    }
+            }
+            return selected.mapNotNull { getReflectString(it, "data") }.distinct()
+        }
+
+        return listOfNotNull(
+            getReflectString(response, "dataUrl"),
+            getReflectString(response, "url")
+        ).distinct()
+    }
+
+    private fun reflectEpisodes(response: LoadResponse): List<Any> {
+        val raw = getReflectValue(response, "episodes") ?: return emptyList()
+        return when (raw) {
+            is Map<*, *> -> raw.values.flatMap { value ->
+                when (value) {
+                    is Iterable<*> -> value.filterNotNull()
+                    else -> listOfNotNull(value)
+                }
+            }
+            is Iterable<*> -> raw.filterNotNull()
+            is Array<*> -> raw.filterNotNull()
+            else -> emptyList()
+        }
+    }
+
+    private fun getReflectValue(target: Any, fieldName: String): Any? {
+        return runCatching {
+            val field = target.javaClass.getDeclaredField(fieldName)
+            field.isAccessible = true
+            field.get(target)
+        }.getOrNull() ?: runCatching {
+            target.javaClass.methods.firstOrNull { method ->
+                method.parameterTypes.isEmpty() &&
+                    method.name.equals("get${fieldName.replaceFirstChar { it.uppercase() }}", true)
+            }?.invoke(target)
+        }.getOrNull()
+    }
+
+    private fun getReflectString(target: Any, fieldName: String): String? {
+        return getReflectValue(target, fieldName)?.toString()?.takeIf { it.isNotBlank() && it != "null" }
+    }
+
+    private fun getReflectInt(target: Any, fieldName: String): Int? {
+        return when (val value = getReflectValue(target, fieldName)) {
+            is Int -> value
+            is Number -> value.toInt()
+            is String -> value.toIntOrNull()
+            else -> null
+        }
+    }
+
+    private fun titleMatches(title: String?, candidates: List<String>): Boolean {
+        val normalizedTitle = normalizeTitle(title)
+        if (normalizedTitle.isBlank()) return false
+        return candidates.any { candidate ->
+            val normalizedCandidate = normalizeTitle(candidate)
+            normalizedTitle == normalizedCandidate ||
+                normalizedTitle == stripSeason(normalizedCandidate) ||
+                stripSeason(normalizedTitle) == normalizedCandidate
+        }
+    }
+
+    private fun normalizeTitle(value: String?): String {
+        return value.orEmpty()
+            .lowercase()
+            .replace(Regex("""\[[^\]]*]|\([^)]*\)"""), " ")
+            .replace(Regex("""\b(?:sub|subbed|dub|dubbed|subtitle|indonesia|batch|bd|ova|ona|special)\b"""), " ")
+            .replace(Regex("""[^a-z0-9]+"""), " ")
+            .trim()
+    }
+
+    private fun stripSeason(value: String): String {
+        return value.replace(Regex("""\b(?:season|s)\s*\d+\b.*$"""), "").trim()
+    }
+
+    private fun normalizeProviderName(value: String): String {
+        return value.lowercase().replace(Regex("""[^a-z0-9]+"""), "")
+    }
+
+    private fun TvType.isAnimeType(): Boolean {
+        return this == TvType.Anime || this == TvType.AnimeMovie || this == TvType.OVA
+    }
+
+    private fun currentAniSeason(): Pair<String, Int> {
+        val calendar = Calendar.getInstance()
+        return aniSeason(calendar.get(Calendar.MONTH) + 1) to calendar.get(Calendar.YEAR)
+    }
+
+    private fun nextAniSeason(): Pair<String, Int> {
+        val calendar = Calendar.getInstance()
+        calendar.add(Calendar.MONTH, 3)
+        return aniSeason(calendar.get(Calendar.MONTH) + 1) to calendar.get(Calendar.YEAR)
+    }
+
+    private fun aniSeason(month: Int): String {
+        return when (month) {
+            12, 1, 2 -> "WINTER"
+            3, 4, 5 -> "SPRING"
+            6, 7, 8 -> "SUMMER"
+            else -> "FALL"
+        }
     }
 
     data class LinkData(
         val id: Int? = null,
-        val imdbId: String? = null,
-        val tvdbId: Int? = null,
-        val type: String? = null,
-        val season: Int? = null,
-        val episode: Int? = null,
-        val absoluteEpisode: Int? = null,
-        val aniId: String? = null,
-        val animeId: String? = null,
         val malId: Int? = null,
         val title: String? = null,
-        val year: Int? = null,
-        val orgTitle: String? = null,
-        val isAnime: Boolean = false,
-        val airedYear: Int? = null,
-        val lastSeason: Int? = null,
-        val epsTitle: String? = null,
-        val jpTitle: String? = null,
-        val date: String? = null,
-        val airedDate: String? = null,
-        val isAsian: Boolean = false,
-        val isBollywood: Boolean = false,
-        val isCartoon: Boolean = false,
+        val englishTitle: String? = null,
+        val nativeTitle: String? = null,
+        val format: String? = null,
+        val episode: Int? = null,
     )
 
-    data class Data(
-        val id: Int? = null,
-        val type: String? = null,
-        val aniId: String? = null,
-        val malId: Int? = null,
+    data class AnilistResponse(
+        @param:JsonProperty("data") val data: AnilistData? = null,
     )
 
-    data class Results(
-        @param:JsonProperty("results") val results: ArrayList<Media>? = arrayListOf(),
+    data class AnilistData(
+        @param:JsonProperty("Page") val Page: AnilistPage? = null,
+        @param:JsonProperty("Media") val Media: AnilistMedia? = null,
     )
 
-    data class Media(
+    data class AnilistPage(
+        @param:JsonProperty("pageInfo") val pageInfo: PageInfo? = null,
+        @param:JsonProperty("media") val media: List<AnilistMedia>? = null,
+    )
+
+    data class PageInfo(
+        @param:JsonProperty("hasNextPage") val hasNextPage: Boolean? = null,
+    )
+
+    data class AnilistMedia(
         @param:JsonProperty("id") val id: Int? = null,
-        @param:JsonProperty("name") val name: String? = null,
-        @param:JsonProperty("title") val title: String? = null,
-        @param:JsonProperty("original_title") val originalTitle: String? = null,
-        @param:JsonProperty("original_language") val originalLanguage: String? = null,
-        @param:JsonProperty("media_type") val mediaType: String? = null,
-        @param:JsonProperty("poster_path") val posterPath: String? = null,
-        @param:JsonProperty("vote_average") val voteAverage: Double? = null,
-    )
-
-    data class Genres(
-        @param:JsonProperty("id") val id: Int? = null,
-        @param:JsonProperty("name") val name: String? = null,
-    )
-
-    data class Keywords(
-        @param:JsonProperty("id") val id: Int? = null,
-        @param:JsonProperty("name") val name: String? = null,
-    )
-
-    data class KeywordResults(
-        @param:JsonProperty("results") val results: ArrayList<Keywords>? = arrayListOf(),
-        @param:JsonProperty("keywords") val keywords: ArrayList<Keywords>? = arrayListOf(),
-    )
-
-    data class Seasons(
-        @param:JsonProperty("id") val id: Int? = null,
-        @param:JsonProperty("name") val name: String? = null,
-        @param:JsonProperty("season_number") val seasonNumber: Int? = null,
-        @param:JsonProperty("air_date") val airDate: String? = null,
-    )
-
-    data class Cast(
-        @param:JsonProperty("id") val id: Int? = null,
-        @param:JsonProperty("name") val name: String? = null,
-        @param:JsonProperty("original_name") val originalName: String? = null,
-        @param:JsonProperty("character") val character: String? = null,
-        @param:JsonProperty("known_for_department") val knownForDepartment: String? = null,
-        @param:JsonProperty("profile_path") val profilePath: String? = null,
-    )
-
-    data class Episodes(
-        @param:JsonProperty("id") val id: Int? = null,
-        @param:JsonProperty("name") val name: String? = null,
-        @param:JsonProperty("overview") val overview: String? = null,
-        @param:JsonProperty("air_date") val airDate: String? = null,
-        @param:JsonProperty("still_path") val stillPath: String? = null,
-        @param:JsonProperty("vote_average") val voteAverage: Double? = null,
-        @param:JsonProperty("episode_number") val episodeNumber: Int? = null,
-        @param:JsonProperty("season_number") val seasonNumber: Int? = null,
-    )
-
-    data class MediaDetailEpisodes(
-        @param:JsonProperty("episodes") val episodes: ArrayList<Episodes>? = arrayListOf(),
-    )
-
-    data class Trailers(
-        @param:JsonProperty("key") val key: String? = null,
-    )
-
-    data class ResultsTrailer(
-        @param:JsonProperty("results") val results: ArrayList<Trailers>? = arrayListOf(),
-    )
-
-    data class AltTitles(
-        @param:JsonProperty("iso_3166_1") val iso_3166_1: String? = null,
-        @param:JsonProperty("title") val title: String? = null,
-        @param:JsonProperty("type") val type: String? = null,
-    )
-
-    data class ResultsAltTitles(
-        @param:JsonProperty("results") val results: ArrayList<AltTitles>? = arrayListOf(),
-    )
-
-    data class ExternalIds(
-        @param:JsonProperty("imdb_id") val imdb_id: String? = null,
-        @param:JsonProperty("tvdb_id") val tvdb_id: Int? = null,
-    )
-
-    data class Credits(
-        @param:JsonProperty("cast") val cast: ArrayList<Cast>? = arrayListOf(),
-    )
-
-    data class ResultsRecommendations(
-        @param:JsonProperty("results") val results: ArrayList<Media>? = arrayListOf(),
-    )
-
-    data class LastEpisodeToAir(
-        @param:JsonProperty("episode_number") val episode_number: Int? = null,
-        @param:JsonProperty("season_number") val season_number: Int? = null,
-    )
-
-    data class ProductionCountries(
-        @param:JsonProperty("name") val name: String? = null,
-    )
-
-    data class MediaDetail(
-        @param:JsonProperty("id") val id: Int? = null,
-        @param:JsonProperty("imdb_id") val imdbId: String? = null,
-        @param:JsonProperty("title") val title: String? = null,
-        @param:JsonProperty("name") val name: String? = null,
-        @param:JsonProperty("original_title") val originalTitle: String? = null,
-        @param:JsonProperty("original_name") val originalName: String? = null,
-        @param:JsonProperty("poster_path") val posterPath: String? = null,
-        @param:JsonProperty("backdrop_path") val backdropPath: String? = null,
-        @param:JsonProperty("release_date") val releaseDate: String? = null,
-        @param:JsonProperty("first_air_date") val firstAirDate: String? = null,
-        @param:JsonProperty("overview") val overview: String? = null,
-        @param:JsonProperty("runtime") val runtime: Int? = null,
-        @param:JsonProperty("vote_average") val vote_average: Any? = null,
-        @param:JsonProperty("original_language") val original_language: String? = null,
+        @param:JsonProperty("idMal") val idMal: Int? = null,
+        @param:JsonProperty("format") val format: String? = null,
         @param:JsonProperty("status") val status: String? = null,
-        @param:JsonProperty("genres") val genres: ArrayList<Genres>? = arrayListOf(),
-        @param:JsonProperty("keywords") val keywords: KeywordResults? = null,
-        @param:JsonProperty("last_episode_to_air") val last_episode_to_air: LastEpisodeToAir? = null,
-        @param:JsonProperty("seasons") val seasons: ArrayList<Seasons>? = arrayListOf(),
-        @param:JsonProperty("videos") val videos: ResultsTrailer? = null,
-        @param:JsonProperty("external_ids") val external_ids: ExternalIds? = null,
-        @param:JsonProperty("credits") val credits: Credits? = null,
-        @param:JsonProperty("recommendations") val recommendations: ResultsRecommendations? = null,
-        @param:JsonProperty("alternative_titles") val alternative_titles: ResultsAltTitles? = null,
-        @param:JsonProperty("production_countries") val production_countries: ArrayList<ProductionCountries>? = arrayListOf(),
+        @param:JsonProperty("episodes") val episodes: Int? = null,
+        @param:JsonProperty("duration") val duration: Int? = null,
+        @param:JsonProperty("season") val season: String? = null,
+        @param:JsonProperty("seasonYear") val seasonYear: Int? = null,
+        @param:JsonProperty("description") val description: String? = null,
+        @param:JsonProperty("bannerImage") val bannerImage: String? = null,
+        @param:JsonProperty("genres") val genres: List<String?>? = null,
+        @param:JsonProperty("title") val title: AnilistTitle? = null,
+        @param:JsonProperty("coverImage") val coverImage: AnilistCover? = null,
+        @param:JsonProperty("startDate") val startDate: AnilistDate? = null,
+        @param:JsonProperty("nextAiringEpisode") val nextAiringEpisode: NextAiringEpisode? = null,
     )
 
+    data class AnilistTitle(
+        @param:JsonProperty("romaji") val romaji: String? = null,
+        @param:JsonProperty("english") val english: String? = null,
+        @param:JsonProperty("native") val native: String? = null,
+    )
+
+    data class AnilistCover(
+        @param:JsonProperty("extraLarge") val extraLarge: String? = null,
+        @param:JsonProperty("large") val large: String? = null,
+    )
+
+    data class AnilistDate(
+        @param:JsonProperty("year") val year: Int? = null,
+        @param:JsonProperty("month") val month: Int? = null,
+        @param:JsonProperty("day") val day: Int? = null,
+    )
+
+    data class NextAiringEpisode(
+        @param:JsonProperty("episode") val episode: Int? = null,
+    )
+
+    companion object {
+        private const val ANILIST_API = "https://graphql.anilist.co"
+    }
 }
