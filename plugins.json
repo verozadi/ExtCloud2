@@ -1086,24 +1086,24 @@
         "name": "SontolFilmProvider"
     },
     {
-        "iconUrl": "https://github.com/duro92/ExtCloud/blob/main/SoraAnime/Icon.png",
-        "fileHash": "sha256-a53c6b0422b1c44feadb53f531bb737d894049df1543e64327dc8e5e8ab36402",
+        "fileHash": "sha256-6f92986cbef1ab3f56f0a1a273f540c2feac4324307173a8d6a25e6caa631d9b",
         "apiVersion": 1,
         "repositoryUrl": "https://github.com/Pendztagram/ex",
-        "fileSize": 314328,
+        "fileSize": 34194,
         "status": 1,
-        "language": "en",
+        "language": "id",
         "authors": [
-            "Hexated",
+            "duro92",
             "Sora"
         ],
         "tvTypes": [
             "Anime",
-            "AnimeMovie"
+            "AnimeMovie",
+            "OVA"
         ],
         "version": 1,
         "internalName": "SoraAnime",
-        "description": "Anime-only provider based on SoraStream sources",
+        "description": "Anime provider berbasis AniList dengan link dari provider anime terpasang",
         "url": "https://raw.githubusercontent.com/Pendztagram/ex/builds/SoraAnime.cs3",
         "name": "SoraAnime"
     },
