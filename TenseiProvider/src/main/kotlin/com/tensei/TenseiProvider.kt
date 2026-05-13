@@ -13,7 +13,7 @@ import java.net.URLEncoder
 
 class TenseiProvider : MainAPI() {
     override var mainUrl = "https://tensei.club"
-    override var name = "Tensei ID"
+    override var name = "Tensei ID🙉"
     override var lang = "id"
     override val hasMainPage = true
     override val hasDownloadSupport = true
