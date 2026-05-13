@@ -1086,10 +1086,10 @@
         "name": "SontolFilmProvider"
     },
     {
-        "fileHash": "sha256-4761cc558f34380e81b3461bfefcab79f3a50d685031cb3f5379e7a9f5bd44a5",
+        "fileHash": "sha256-6ae31dda01a272235fff16dcb6b9c435b43455fb5fbfdfd4635c49ef0c2ee70e",
         "apiVersion": 1,
         "repositoryUrl": "https://github.com/Pendztagram/ex",
-        "fileSize": 35895,
+        "fileSize": 35896,
         "status": 1,
         "language": "id",
         "authors": [
@@ -1101,7 +1101,7 @@
             "AnimeMovie",
             "OVA"
         ],
-        "version": 1,
+        "version": 2,
         "internalName": "SoraAnime",
         "description": "Anime provider berbasis AniList dengan link dari provider anime terpasang",
         "url": "https://raw.githubusercontent.com/Pendztagram/ex/builds/SoraAnime.cs3",
@@ -1133,10 +1133,10 @@
     },
     {
         "iconUrl": "https://t2.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=https://tensei.club&size=%size%",
-        "fileHash": "sha256-26caff2463d8f29eafb8de488fb4d1901f82ffe3c03c617b17c0a5122766ac05",
+        "fileHash": "sha256-36dd9d985c45ed6d174d03270143927d2e9ab19ead760b59987be37529434d27",
         "apiVersion": 1,
         "repositoryUrl": "https://github.com/Pendztagram/ex",
-        "fileSize": 34560,
+        "fileSize": 34565,
         "status": 1,
         "language": "id",
         "authors": [
