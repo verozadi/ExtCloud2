@@ -50,7 +50,6 @@ class SoraAnime : MainAPI() {
         "POPULARITY_DESC" to "Popular Anime",
         "SCORE_DESC" to "Top Rated Anime",
         "CURRENT" to "Season Ini",
-        "NEXT" to "Season Berikutnya",
         "MOVIE" to "Anime Movie",
     )
 
@@ -63,15 +62,6 @@ class SoraAnime : MainAPI() {
                 "seasonYear" to season.second,
                 "sort" to listOf("POPULARITY_DESC")
             )
-            "NEXT" -> {
-                val next = nextAniSeason()
-                mapOf(
-                    "page" to page,
-                    "season" to next.first,
-                    "seasonYear" to next.second,
-                    "sort" to listOf("POPULARITY_DESC")
-                )
-            }
             "MOVIE" -> mapOf(
                 "page" to page,
                 "format" to listOf("MOVIE"),
@@ -151,6 +141,7 @@ class SoraAnime : MainAPI() {
         val linkData = parseJson<LinkData>(data)
         val titles = linkData.titleCandidates()
         val episode = linkData.episode
+        val isMovie = linkData.format == "MOVIE"
         val providers = installedAnimeProviders()
         val semaphore = Semaphore(6)
 
@@ -160,10 +151,10 @@ class SoraAnime : MainAPI() {
                     semaphore.withPermit {
                         runCatching {
                             val result = provider.search(titles.firstOrNull().orEmpty()).orEmpty()
-                                .firstOrNull { it.type?.isAnimeType() == true && titleMatches(it.name, titles) }
+                                .firstOrNull { providerSearchMatches(it, titles, isMovie) }
                                 ?: return@runCatching
                             val response = provider.load(result.url) ?: return@runCatching
-                            providerEpisodeData(response, episode).forEach { episodeData ->
+                            providerEpisodeData(response, episode, isMovie).forEach { episodeData ->
                                 provider.loadLinks(episodeData, false, subtitleCallback, callback)
                             }
                         }.onFailure {
@@ -326,8 +317,35 @@ class SoraAnime : MainAPI() {
             }.orEmpty()
     }
 
-    private fun providerEpisodeData(response: LoadResponse, episode: Int?): List<String> {
+    private fun providerSearchMatches(
+        result: SearchResponse,
+        candidates: List<String>,
+        isMovie: Boolean,
+    ): Boolean {
+        val type = result.type ?: return false
+        if (!type.isAnimeType()) return false
+        if (isMovie && type != TvType.AnimeMovie) return false
+        return titleMatches(result.name, candidates, strict = isMovie)
+    }
+
+    private fun providerEpisodeData(response: LoadResponse, episode: Int?, isMovie: Boolean): List<String> {
         val episodes = reflectEpisodes(response)
+        val directData = listOfNotNull(
+            getReflectString(response, "dataUrl"),
+            getReflectString(response, "url")
+        ).distinct()
+
+        if (isMovie) {
+            getReflectString(response, "dataUrl")?.let { return listOf(it) }
+            return if (episodes.size == 1 && getReflectInt(episodes.first(), "episode") in listOf(null, 1)) {
+                listOfNotNull(getReflectString(episodes.first(), "data")).distinct()
+            } else if (episodes.isEmpty()) {
+                listOfNotNull(getReflectString(response, "url")).distinct()
+            } else {
+                emptyList()
+            }
+        }
+
         if (episodes.isNotEmpty()) {
             val selected = if (episode == null) {
                 episodes.take(1)
@@ -342,10 +360,7 @@ class SoraAnime : MainAPI() {
             return selected.mapNotNull { getReflectString(it, "data") }.distinct()
         }
 
-        return listOfNotNull(
-            getReflectString(response, "dataUrl"),
-            getReflectString(response, "url")
-        ).distinct()
+        return directData
     }
 
     private fun reflectEpisodes(response: LoadResponse): List<Any> {
@@ -389,15 +404,37 @@ class SoraAnime : MainAPI() {
         }
     }
 
-    private fun titleMatches(title: String?, candidates: List<String>): Boolean {
+    private fun titleMatches(title: String?, candidates: List<String>, strict: Boolean = false): Boolean {
         val normalizedTitle = normalizeTitle(title)
         if (normalizedTitle.isBlank()) return false
         return candidates.any { candidate ->
             val normalizedCandidate = normalizeTitle(candidate)
-            normalizedTitle == normalizedCandidate ||
+            if (strict) {
+                movieTitleMatches(normalizedTitle, normalizedCandidate)
+            } else {
+                normalizedTitle == normalizedCandidate ||
                 normalizedTitle == stripSeason(normalizedCandidate) ||
                 stripSeason(normalizedTitle) == normalizedCandidate
+            }
         }
+    }
+
+    private fun movieTitleMatches(title: String, candidate: String): Boolean {
+        if (title == candidate) return true
+        val titleTokens = significantTokens(title)
+        val candidateTokens = significantTokens(candidate)
+        if (titleTokens.isEmpty() || candidateTokens.isEmpty()) return false
+
+        val overlap = titleTokens.intersect(candidateTokens)
+        val hasMovieMarker = movieMarkers.any { marker ->
+            title.contains(marker) || candidate.contains(marker)
+        }
+        val hasDistinctMovieWord = movieDistinctWords.any { word ->
+            titleTokens.contains(word) && candidateTokens.contains(word)
+        }
+        return hasMovieMarker &&
+            hasDistinctMovieWord &&
+            overlap.size >= minOf(candidateTokens.size, titleTokens.size).coerceAtMost(4)
     }
 
     private fun normalizeTitle(value: String?): String {
@@ -407,6 +444,12 @@ class SoraAnime : MainAPI() {
             .replace(Regex("""\b(?:sub|subbed|dub|dubbed|subtitle|indonesia|batch|bd|ova|ona|special)\b"""), " ")
             .replace(Regex("""[^a-z0-9]+"""), " ")
             .trim()
+    }
+
+    private fun significantTokens(value: String): Set<String> {
+        return value.split(" ")
+            .filter { it.length > 2 && it !in titleStopWords }
+            .toSet()
     }
 
     private fun stripSeason(value: String): String {
@@ -423,12 +466,6 @@ class SoraAnime : MainAPI() {
 
     private fun currentAniSeason(): Pair<String, Int> {
         val calendar = Calendar.getInstance()
-        return aniSeason(calendar.get(Calendar.MONTH) + 1) to calendar.get(Calendar.YEAR)
-    }
-
-    private fun nextAniSeason(): Pair<String, Int> {
-        val calendar = Calendar.getInstance()
-        calendar.add(Calendar.MONTH, 3)
         return aniSeason(calendar.get(Calendar.MONTH) + 1) to calendar.get(Calendar.YEAR)
     }
 
@@ -510,5 +547,28 @@ class SoraAnime : MainAPI() {
 
     companion object {
         private const val ANILIST_API = "https://graphql.anilist.co"
+        private val titleStopWords = setOf(
+            "the",
+            "movie",
+            "film",
+            "gekijouban",
+            "season",
+            "part",
+        )
+        private val movieMarkers = listOf(" movie ", " film ", " gekijouban ")
+        private val movieDistinctWords = setOf(
+            "train",
+            "ressha",
+            "mugen",
+            "infinity",
+            "castle",
+            "world",
+            "hero",
+            "heroes",
+            "red",
+            "blue",
+            "gold",
+            "final",
+        )
     }
 }
