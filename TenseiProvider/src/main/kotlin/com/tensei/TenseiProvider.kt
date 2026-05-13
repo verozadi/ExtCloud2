@@ -3,6 +3,7 @@ package com.tensei
 import com.fasterxml.jackson.annotation.JsonProperty
 import com.lagradost.cloudstream3.*
 import com.lagradost.cloudstream3.base64Decode
+import com.lagradost.cloudstream3.utils.AppUtils.tryParseJson
 import com.lagradost.cloudstream3.utils.*
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
@@ -269,7 +270,51 @@ class TenseiProvider : MainAPI() {
             return
         }
 
+        if (normalized.contains("filedon.co/", true)) {
+            val direct = resolveFiledonDirect(normalized, referer)
+            val directUrl = direct?.url?.takeIf { it.isNotBlank() }
+            if (directUrl != null) {
+                callback(
+                    newExtractorLink(
+                        source = "Filedon",
+                        name = "$name Filedon $label",
+                        url = directUrl,
+                        type = INFER_TYPE,
+                    ) {
+                        this.referer = "https://filedon.co/"
+                        this.quality = getQualityFromName(label)
+                        this.headers = mapOf(
+                            "Referer" to "https://filedon.co/",
+                            "User-Agent" to USER_AGENT,
+                            "Range" to "bytes=0-",
+                        )
+                    }
+                )
+                return
+            }
+        }
+
         runCatching { loadExtractor(normalized, referer, subtitleCallback, callback) }
+    }
+
+    private suspend fun resolveFiledonDirect(url: String, referer: String): FiledonResolved? {
+        val fixedUrl = url.replace("/view/", "/embed/")
+        val page = runCatching {
+            app.get(
+                fixedUrl,
+                referer = referer,
+                headers = mapOf("User-Agent" to USER_AGENT),
+            ).document
+        }.getOrNull() ?: return null
+
+        val pageJson = page.selectFirst("#app")?.attr("data-page").orEmpty()
+        val parsed = tryParseJson<FiledonPage>(pageJson)
+        val directUrl = parsed?.props?.url
+            ?.replace("\\/", "/")
+            ?.replace("&amp;", "&")
+            ?.takeIf { it.isNotBlank() }
+
+        return directUrl?.let { FiledonResolved(it, parsed.props.files?.name) }
     }
 
     private fun pageUrl(pattern: String, page: Int): String {
@@ -390,6 +435,24 @@ class TenseiProvider : MainAPI() {
     private fun String.toScore(): Double? {
         return Regex("""\d+(?:\.\d+)?""").find(this)?.value?.toDoubleOrNull()
     }
+
+    data class FiledonPage(
+        @param:JsonProperty("props") val props: FiledonProps? = null,
+    )
+
+    data class FiledonProps(
+        @param:JsonProperty("url") val url: String? = null,
+        @param:JsonProperty("files") val files: FiledonFile? = null,
+    )
+
+    data class FiledonFile(
+        @param:JsonProperty("name") val name: String? = null,
+    )
+
+    data class FiledonResolved(
+        val url: String,
+        val fileName: String? = null,
+    )
 }
 
 class TenseiFiledon : ExtractorApi() {
@@ -404,33 +467,46 @@ class TenseiFiledon : ExtractorApi() {
         callback: (ExtractorLink) -> Unit
     ) {
         val fixedUrl = url.replace("/view/", "/embed/")
-        val document = app.get(fixedUrl, referer = referer).document
-        val token = document.select("meta[name=csrf-token]").attr("content")
-        val slug = fixedUrl.substringAfterLast("/")
-
-        val video = app.post(
-            "$mainUrl/get-url",
-            data = mapOf("_token" to token, "slug" to slug),
-            referer = fixedUrl
-        ).parsedSafe<Response>()?.data?.url ?: return
+        val document = app.get(
+            fixedUrl,
+            referer = referer,
+            headers = mapOf("User-Agent" to USER_AGENT),
+        ).document
+        val pageJson = document.selectFirst("#app")?.attr("data-page").orEmpty()
+        val page = tryParseJson<FiledonPage>(pageJson)
+        val video = page?.props?.url
+            ?.replace("\\/", "/")
+            ?.replace("&amp;", "&")
+            ?.takeIf { it.isNotBlank() }
+            ?: return
 
         callback(
             newExtractorLink(
                 source = name,
-                name = name,
+                name = page.props.files?.name ?: name,
                 url = video,
                 type = INFER_TYPE,
             ) {
                 this.referer = "$mainUrl/"
+                this.headers = mapOf(
+                    "Referer" to "$mainUrl/",
+                    "User-Agent" to USER_AGENT,
+                    "Range" to "bytes=0-",
+                )
             }
         )
     }
 
-    data class Data(
-        @param:JsonProperty("url") val url: String? = null,
+    data class FiledonPage(
+        @param:JsonProperty("props") val props: FiledonProps? = null,
     )
 
-    data class Response(
-        @param:JsonProperty("data") val data: Data? = null,
+    data class FiledonProps(
+        @param:JsonProperty("url") val url: String? = null,
+        @param:JsonProperty("files") val files: FiledonFile? = null,
+    )
+
+    data class FiledonFile(
+        @param:JsonProperty("name") val name: String? = null,
     )
 }
