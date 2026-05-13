@@ -1086,10 +1086,10 @@
         "name": "SontolFilmProvider"
     },
     {
-        "fileHash": "sha256-0b5567d12fc2e678f5aec37a19e760dcd414c7461029d544445002141cd04407",
+        "fileHash": "sha256-fb44f5aa3165f1d8f4362a8f3afad707817d736c25abf6137d1edc6cf1be92aa",
         "apiVersion": 1,
         "repositoryUrl": "https://github.com/Pendztagram/ex",
-        "fileSize": 34209,
+        "fileSize": 35870,
         "status": 1,
         "language": "id",
         "authors": [
