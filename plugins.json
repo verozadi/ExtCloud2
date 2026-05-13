@@ -1086,10 +1086,10 @@
         "name": "SontolFilmProvider"
     },
     {
-        "fileHash": "sha256-fb44f5aa3165f1d8f4362a8f3afad707817d736c25abf6137d1edc6cf1be92aa",
+        "fileHash": "sha256-4761cc558f34380e81b3461bfefcab79f3a50d685031cb3f5379e7a9f5bd44a5",
         "apiVersion": 1,
         "repositoryUrl": "https://github.com/Pendztagram/ex",
-        "fileSize": 35870,
+        "fileSize": 35895,
         "status": 1,
         "language": "id",
         "authors": [
@@ -1130,6 +1130,27 @@
         "description": "#1 best extention based on MultiAPI",
         "url": "https://raw.githubusercontent.com/Pendztagram/ex/builds/SoraStream.cs3",
         "name": "SoraStream"
+    },
+    {
+        "iconUrl": "https://t2.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=https://tensei.club&size=%size%",
+        "fileHash": "sha256-ce24c1476bb0204949b6f9885bfeec7fd9d4504e6bc1b7a44070736c2f98629c",
+        "apiVersion": 1,
+        "repositoryUrl": "https://github.com/Pendztagram/ex",
+        "fileSize": 29958,
+        "status": 1,
+        "language": "id",
+        "authors": [
+            "duro92"
+        ],
+        "tvTypes": [
+            "AnimeMovie",
+            "OVA",
+            "Anime"
+        ],
+        "version": 1,
+        "internalName": "TenseiProvider",
+        "url": "https://raw.githubusercontent.com/Pendztagram/ex/builds/TenseiProvider.cs3",
+        "name": "TenseiProvider"
     },
     {
         "iconUrl": "https://t2.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=https://winbu.net&size=%size%",
