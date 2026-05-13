@@ -300,6 +300,7 @@ class SoraAnime : MainAPI() {
             "zoronime",
             "winbu",
             "kazefuri",
+            "tensei",
         )
         val apiHolder = APIHolder::class.java
         return listOf("apis", "allProviders", "allApis", "apiProviders")
