@@ -27,7 +27,9 @@ open class DutaMovie : MainAPI() {
     override var lang = "id"
     override val supportedTypes =
             setOf(TvType.Movie, TvType.TvSeries, TvType.Anime, TvType.AsianDrama)
-    private val redirectHosts = setOf("simplycufflinks.com", "www.simplycufflinks.com")
+    private val fallbackMainUrl = "https://www.seosaja.com"
+    private val rewriteHosts = setOf("simplycufflinks.com", "www.simplycufflinks.com")
+    private val allowedHosts = rewriteHosts + setOf("www.seosaja.com", "seosaja.com")
     
 
     override val mainPage =
@@ -40,12 +42,22 @@ open class DutaMovie : MainAPI() {
             )
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
-        val document = app.get(pageUrl(request.data, page), referer = "$mainUrl/").document
-        val home = document.toSearchResults()
+        var document =
+                runCatching { app.get(pageUrl(request.data, page), referer = "$mainUrl/").document }
+                        .getOrNull()
+        var home = document?.toSearchResults().orEmpty()
+
+        if (home.isEmpty()) {
+            document =
+                    app.get(seosajaPageUrl(request.name, page), referer = "$fallbackMainUrl/")
+                            .document
+            home = document.toSearchResults()
+        }
+
         val hasNext =
-                document
+                document!!
                         .select(
-                                "link[rel=next], a.next.page-numbers, a.page-numbers[href*='/page/${page + 1}/']"
+                                "link[rel=next], a.next.page-numbers, a.btn-next, a.page-numbers[href*='/page/${page + 1}/'], a[href*='/page/${page + 1}']"
                         )
                         .isNotEmpty()
         return newHomePageResponse(request.name, home, hasNext = hasNext)
@@ -71,7 +83,8 @@ open class DutaMovie : MainAPI() {
                         .firstOrNull { !it.isNullOrBlank() }
                         ?.cleanTitle()
                         ?: return null
-        val href = normalizeUrl(anchor.attr("href"), mainUrl)?.rewriteToMainHost() ?: return null
+        val itemBaseUrl = if (selectFirst("h3.poster-title") != null) fallbackMainUrl else mainUrl
+        val href = normalizeUrl(anchor.attr("href"), itemBaseUrl)?.rewriteToMainHost() ?: return null
         if (!href.isAllowedProviderUrl()) return null
         val ratingText =
                 this.selectFirst("div.gmr-rating-item, span.rating")?.text()?.replace("★", "")?.trim()
@@ -104,15 +117,23 @@ open class DutaMovie : MainAPI() {
 
     override suspend fun search(query: String): List<SearchResponse> {
         val encoded = URLEncoder.encode(query.trim(), "UTF-8")
-        val document =
-                app.get(
-                                "${mainUrl}/?s=$encoded",
-                                referer = "$mainUrl/",
-                                timeout = 50L,
-                        )
-                        .document
-        val results = document.toSearchResults()
-        return results
+        val results =
+                runCatching {
+                            app.get(
+                                            "${mainUrl}/?s=$encoded",
+                                            referer = "$mainUrl/",
+                                            timeout = 50L,
+                                    )
+                                    .document
+                                    .toSearchResults()
+                        }
+                        .getOrDefault(emptyList())
+
+        return results.ifEmpty {
+            app.get("${fallbackMainUrl}/?s=$encoded", referer = "$fallbackMainUrl/", timeout = 50L)
+                    .document
+                    .toSearchResults()
+        }
     }
 
     private fun Element.toRecommendResult(): SearchResponse? {
@@ -144,7 +165,7 @@ open class DutaMovie : MainAPI() {
 
     private fun Element.toSeosajaRelatedResult(): SearchResponse? {
         val anchor = selectFirst("a[href]") ?: return null
-        val href = normalizeUrl(anchor.attr("href"), mainUrl)?.rewriteToMainHost() ?: return null
+        val href = normalizeUrl(anchor.attr("href"), fallbackMainUrl)?.rewriteToMainHost() ?: return null
         if (!href.isAllowedProviderUrl()) return null
         val title =
             listOf(
@@ -174,7 +195,7 @@ open class DutaMovie : MainAPI() {
     val fetch = app.get(url, headers = desktopHeaders)
     val document = fetch.document
 
-    if (URI(mainUrl).host.contains("seosaja", true) && url.contains(URI(mainUrl).host, true)) {
+    if (runCatching { URI(url).host.orEmpty() }.getOrDefault("").contains("seosaja", true)) {
         val title = document.selectFirst("div.movie-info h1, h1")
             ?.text()
             ?.trim()
@@ -445,6 +466,20 @@ document.select("ul.gmr-download-list li a").forEach { linkEl ->
         return normalizeUrl(path, mainUrl) ?: "$mainUrl/"
     }
 
+    private fun seosajaPageUrl(section: String, page: Int): String {
+        val path =
+                when (section) {
+                    "Box Office" -> "genre/box-office/page/%d"
+                    "Serial TV" -> "genre/serial-tv/page/%d"
+                    "Animasi" -> "genre/animation/page/%d"
+                    "Serial TV Korea" -> "country/korea/page/%d"
+                    "Serial TV Indonesia" -> "country/indonesia/page/%d"
+                    else -> "genre/box-office/page/%d"
+                }
+        val fixedPath = if (page <= 1) path.replace("/page/%d", "") else path.format(page)
+        return normalizeUrl(fixedPath, fallbackMainUrl) ?: "$fallbackMainUrl/"
+    }
+
     private fun normalizeUrl(raw: String, baseUrl: String): String? {
         val clean =
                 Jsoup.parse(raw)
@@ -470,13 +505,13 @@ document.select("ul.gmr-download-list li a").forEach { linkEl ->
 
     private fun String.isAllowedProviderUrl(): Boolean {
         val host = runCatching { URI(this).host.orEmpty() }.getOrDefault("")
-        return host.equals(URI(mainUrl).host, true) || redirectHosts.any { host.equals(it, true) }
+        return host.equals(URI(mainUrl).host, true) || allowedHosts.any { host.equals(it, true) }
     }
 
     private fun String.rewriteToMainHost(): String {
         val uri = runCatching { URI(this) }.getOrNull() ?: return this
         val host = uri.host ?: return this
-        if (host.equals(URI(mainUrl).host, true) || redirectHosts.none { host.equals(it, true) }) return this
+        if (host.equals(URI(mainUrl).host, true) || rewriteHosts.none { host.equals(it, true) }) return this
         return URI(
                 URI(mainUrl).scheme,
                 uri.userInfo,

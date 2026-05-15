@@ -6,13 +6,18 @@ import com.lagradost.cloudstream3.utils.newExtractorLink
 import com.lagradost.cloudstream3.utils.ExtractorLink
 import com.lagradost.cloudstream3.SubtitleFile
 import com.lagradost.cloudstream3.utils.ExtractorApi
+import com.lagradost.cloudstream3.extractors.VidStack
 import com.lagradost.cloudstream3.utils.*
 import com.lagradost.cloudstream3.utils.Qualities
 import com.lagradost.cloudstream3.utils.ExtractorLinkType
 
 
 
-
+class Filmapikstrp2p : VidStack() {
+    override var name = "Filmapikstrp2p"
+    override var mainUrl = "https://fiilmapik.strp2p.site"
+    override var requiresReferer = true
+}
 
 class BuzzServer : ExtractorApi() {
     override val name = "BuzzServer"

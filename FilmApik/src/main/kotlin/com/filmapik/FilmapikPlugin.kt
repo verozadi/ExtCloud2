@@ -11,5 +11,6 @@ class FilmapikPlugin : Plugin() {
         Filmapik.context = context
         registerMainAPI(Filmapik())
         registerExtractorAPI(BuzzServer())
+        registerExtractorAPI(Filmapikstrp2p())
     }
 }
